@@ -30,9 +30,13 @@ export default function RootLayout() {
     });
   }, []);
 
+  const disconnectSocket = useSocketStore((s) => s.disconnectSocket);
+
   useEffect(() => {
     if (isAuthenticated) {
       connectSocket();
+    } else {
+      disconnectSocket();
     }
   }, [isAuthenticated]);
 

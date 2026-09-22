@@ -23,5 +23,13 @@ export const authService = {
     const res = await apiClient.get<{ success: boolean; data: IUser }>("/users/me");
     return res.data.data;
   },
+
+  async refreshToken(refreshToken: string): Promise<{ accessToken: string; refreshToken?: string }> {
+    const res = await apiClient.post<{ success: boolean; data: { accessToken: string; refreshToken?: string } }>(
+      "/auth/refresh-token",
+      { refreshToken }
+    );
+    return res.data.data;
+  },
 };
 

@@ -9,6 +9,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   setAuth: (user: IUser, token: string, refreshToken?: string) => Promise<void>;
+  setTokens: (accessToken: string, refreshToken?: string) => Promise<void>;
   restoreSession: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -26,6 +27,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     await Storage.setItem("user", JSON.stringify(user));
     set({ user, accessToken: token, isAuthenticated: true, isLoading: false });
+  },
+
+  async setTokens(accessToken: string, refreshToken?: string) {
+    await Storage.setItem("accessToken", accessToken);
+    if (refreshToken) {
+      await Storage.setItem("refreshToken", refreshToken);
+    }
+    set({ accessToken });
   },
 
   async restoreSession() {
@@ -54,7 +63,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   async logout() {
-    await authService.logout();
+    try {
+      await authService.logout();
+    } catch {}
     await Storage.removeItem("accessToken");
     await Storage.removeItem("refreshToken");
     await Storage.removeItem("user");

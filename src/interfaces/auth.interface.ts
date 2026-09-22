@@ -19,9 +19,11 @@ export interface IAuthResponse {
   message: string;
   token?: string;
   accessToken?: string;
+  refreshToken?: string;
   user?: IUser;
   data?: {
     accessToken?: string;
+    refreshToken?: string;
     token?: string;
     user?: IUser;
   };

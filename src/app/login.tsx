@@ -42,9 +42,10 @@ export default function LoginScreen() {
 
       const user = res.user || res.data?.user;
       const token = res.accessToken || res.token || res.data?.accessToken;
+      const refreshToken = res.refreshToken || res.data?.refreshToken;
 
       if (user && token) {
-        await setAuth(user, token);
+        await setAuth(user, token, refreshToken);
         await connectSocket();
         router.replace("/(tabs)" as any);
       } else {
