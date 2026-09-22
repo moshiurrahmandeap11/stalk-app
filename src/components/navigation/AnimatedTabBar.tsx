@@ -1,12 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-export interface AnimatedTabBarProps {
-  state: any;
-  descriptors: any;
-  navigation: any;
-}
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -15,14 +9,27 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { Home, Film, Plus, User, Compass } from "lucide-react-native";
 
+export interface AnimatedTabBarProps {
+  state: any;
+  descriptors: any;
+  navigation: any;
+}
+
 interface TabItemProps {
   name: string;
   isFocused: boolean;
+  isDarkTab: boolean;
   onPress: () => void;
   onLongPress: () => void;
 }
 
-const TabItem: React.FC<TabItemProps> = ({ name, isFocused, onPress, onLongPress }) => {
+const TabItem: React.FC<TabItemProps> = ({
+  name,
+  isFocused,
+  isDarkTab,
+  onPress,
+  onLongPress,
+}) => {
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -40,7 +47,12 @@ const TabItem: React.FC<TabItemProps> = ({ name, isFocused, onPress, onLongPress
   };
 
   const renderIcon = () => {
-    const color = isFocused ? "#3B82F6" : "#64748B";
+    let color: string;
+    if (isDarkTab) {
+      color = isFocused ? "#FFFFFF" : "rgba(255, 255, 255, 0.55)";
+    } else {
+      color = isFocused ? "#3B82F6" : "#64748B";
+    }
     const size = 23;
 
     switch (name) {
@@ -81,17 +93,33 @@ const TabItem: React.FC<TabItemProps> = ({ name, isFocused, onPress, onLongPress
     >
       <Animated.View style={[styles.iconWrapper, animatedStyle]}>
         {renderIcon()}
-        {isFocused && <View style={styles.activeDot} />}
+        {isFocused && (
+          <View
+            style={[
+              styles.activeDot,
+              isDarkTab && { backgroundColor: "#FFFFFF" },
+            ]}
+          />
+        )}
       </Animated.View>
-      <Text style={[styles.tabLabel, isFocused && styles.activeTabLabel]}>
+      <Text
+        style={[
+          styles.tabLabel,
+          isDarkTab && styles.darkTabLabel,
+          isFocused && (isDarkTab ? styles.darkActiveTabLabel : styles.activeTabLabel),
+        ]}
+      >
         {getLabel()}
       </Text>
     </TouchableOpacity>
   );
 };
 
-// Distinctive Telegram / Instagram styled Center (+) Button
-const CenterCreateButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
+// Distinctive Center (+) Button
+const CenterCreateButton: React.FC<{ onPress: () => void; isDarkTab: boolean }> = ({
+  onPress,
+  isDarkTab,
+}) => {
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -111,7 +139,14 @@ const CenterCreateButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
       <Animated.View style={[styles.createBtn, animatedStyle]}>
         <Plus size={24} color="#FFFFFF" strokeWidth={3} />
       </Animated.View>
-      <Text style={styles.createBtnLabel}>Post</Text>
+      <Text
+        style={[
+          styles.createBtnLabel,
+          isDarkTab && { color: "rgba(255, 255, 255, 0.85)" },
+        ]}
+      >
+        Post
+      </Text>
     </TouchableOpacity>
   );
 };
@@ -122,9 +157,17 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarProps> = ({
   navigation,
 }) => {
   const insets = useSafeAreaInsets();
+  const currentRoute = state.routes[state.index]?.name;
+  const isDarkTab = currentRoute === "videos";
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View
+      style={[
+        styles.container,
+        isDarkTab && styles.darkContainer,
+        { paddingBottom: Math.max(insets.bottom, 8) },
+      ]}
+    >
       {state.routes.map((route: any, index: number) => {
         const isFocused = state.index === index;
         const { options } = descriptors[route.key];
@@ -153,6 +196,7 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarProps> = ({
           return (
             <CenterCreateButton
               key={route.key}
+              isDarkTab={isDarkTab}
               onPress={() => {
                 navigation.navigate("create");
               }}
@@ -165,6 +209,7 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarProps> = ({
             key={route.key}
             name={route.name}
             isFocused={isFocused}
+            isDarkTab={isDarkTab}
             onPress={onPress}
             onLongPress={onLongPress}
           />
@@ -186,6 +231,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 8,
+  },
+  darkContainer: {
+    backgroundColor: "rgba(10, 15, 29, 0.96)",
+    borderTopColor: "rgba(255, 255, 255, 0.12)",
+    shadowOpacity: 0,
+    elevation: 0,
   },
   tabItem: {
     flex: 1,
@@ -211,8 +262,15 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginTop: 2,
   },
+  darkTabLabel: {
+    color: "rgba(255, 255, 255, 0.55)",
+  },
   activeTabLabel: {
     color: "#3B82F6",
+    fontWeight: "700",
+  },
+  darkActiveTabLabel: {
+    color: "#FFFFFF",
     fontWeight: "700",
   },
   createBtnWrapper: {

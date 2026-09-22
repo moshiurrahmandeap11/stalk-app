@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -18,11 +19,13 @@ import { ArrowLeft, Send } from "lucide-react-native";
 import { postService } from "../../services/post.service";
 import { PostCard } from "../../components/post/PostCard";
 import { IPostComment } from "../../interfaces/post.interface";
+import { useAuthStore } from "../../store/auth.store";
 
 export default function PostDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuthStore();
   const [commentText, setCommentText] = useState("");
 
   const { data: post, isLoading } = useQuery({
@@ -36,11 +39,25 @@ export default function PostDetailScreen() {
     onSuccess: () => {
       setCommentText("");
       queryClient.invalidateQueries({ queryKey: ["post", id] });
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err.message || "Failed to post comment.";
+      Alert.alert("Comment Failed", msg);
     },
   });
 
   const handleSendComment = () => {
     if (!commentText.trim()) return;
+
+    if (!isAuthenticated) {
+      Alert.alert("Sign In Required", "Please sign in to write a comment.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign In", onPress: () => router.push("/login" as any) },
+      ]);
+      return;
+    }
+
     commentMutation.mutate(commentText.trim());
   };
 

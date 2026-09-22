@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Film, Camera, RefreshCw } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { postService } from "../../services/post.service";
@@ -26,10 +26,23 @@ export default function VideosTabScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isScreenFocused, setIsScreenFocused] = useState(false);
 
-  // Height of each reel item equals screen height minus the bottom tab bar
+  // Measure exact container height on screen layout so no gap or next reel peek occurs
   const bottomBarHeight = 60 + Math.max(insets.bottom, 8);
-  const reelHeight = SCREEN_HEIGHT - bottomBarHeight;
+  const fallbackHeight = SCREEN_HEIGHT - bottomBarHeight;
+  const [containerHeight, setContainerHeight] = useState(fallbackHeight);
+  const reelHeight = containerHeight > 0 ? containerHeight : fallbackHeight;
+
+  // Track tab screen focus to pause video playback immediately when user switches tabs
+  useFocusEffect(
+    useCallback(() => {
+      setIsScreenFocused(true);
+      return () => {
+        setIsScreenFocused(false);
+      };
+    }, [])
+  );
 
   const {
     data,
@@ -74,14 +87,24 @@ export default function VideosTabScreen() {
       <ReelItem
         post={item}
         isActive={index === activeIndex}
+        isScreenFocused={isScreenFocused}
+        shouldLoad={Math.abs(index - activeIndex) <= 1}
         itemHeight={reelHeight}
       />
     ),
-    [activeIndex, reelHeight]
+    [activeIndex, isScreenFocused, reelHeight]
   );
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      onLayout={(e) => {
+        const h = Math.round(e.nativeEvent.layout.height);
+        if (h > 0 && Math.abs(h - containerHeight) > 1) {
+          setContainerHeight(h);
+        }
+      }}
+    >
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Floating Header */}
@@ -145,6 +168,10 @@ export default function VideosTabScreen() {
           viewabilityConfig={viewabilityConfig}
           refreshing={isRefetching}
           onRefresh={refetch}
+          windowSize={3}
+          maxToRenderPerBatch={2}
+          initialNumToRender={2}
+          removeClippedSubviews={Platform.OS === "android"}
           getItemLayout={(_data, index) => ({
             length: reelHeight,
             offset: reelHeight * index,
@@ -246,4 +273,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-

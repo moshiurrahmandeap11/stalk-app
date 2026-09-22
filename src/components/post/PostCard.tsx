@@ -1,14 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Alert,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
+import { useRouter } from "expo-router";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -21,7 +23,6 @@ import {
   MessageCircle,
   Share2,
   MoreHorizontal,
-  Play,
 } from "lucide-react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { IPost } from "../../interfaces/post.interface";
@@ -30,9 +31,12 @@ import { followService } from "../../services/follow.service";
 import { useAuthStore } from "../../store/auth.store";
 import { SharedPostPreview } from "./SharedPostPreview";
 import { ShareModal } from "./ShareModal";
+import { CommentBottomSheet } from "./CommentBottomSheet";
+import { FeedVideoPlayer } from "./FeedVideoPlayer";
 
 interface PostCardProps {
   post: IPost;
+  isVisible?: boolean;
   onPressComment?: () => void;
   onPressUser?: (username?: string | null) => void;
   onPostDeleted?: (postId: string) => void;
@@ -59,10 +63,12 @@ const getTimeAgo = (dateStr?: string | Date) => {
 
 export const PostCard: React.FC<PostCardProps> = ({
   post,
+  isVisible = false,
   onPressComment,
   onPressUser,
   onPostDeleted,
 }) => {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((s) => s.user?.id);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -82,9 +88,26 @@ export const PostCard: React.FC<PostCardProps> = ({
     post.likesCount ?? (post.likes ? post.likes.length : 0)
   );
 
-  // Modals & Menu
+  // Comments state
+  const [showCommentSheet, setShowCommentSheet] = useState(false);
+  const [commentCount, setCommentCount] = useState(
+    post.commentsCount ?? (post.comments ? post.comments.length : 0)
+  );
+
+  // Share state
   const [showShareModal, setShowShareModal] = useState(false);
   const [sharesCount, setSharesCount] = useState(post.sharesCount ?? 0);
+
+  // Sync props when post updates
+  useEffect(() => {
+    const liked = Boolean(
+      (currentUserId && post.likes && post.likes.includes(currentUserId)) ||
+        post.isLikedByCurrentUser
+    );
+    setIsUpvoted(liked);
+    setLikesCount(post.likesCount ?? (post.likes ? post.likes.length : 0));
+    setCommentCount(post.commentsCount ?? (post.comments ? post.comments.length : 0));
+  }, [post.likes, post.likesCount, post.isLikedByCurrentUser, post.commentsCount, currentUserId]);
 
   // Animations
   const upvoteScale = useSharedValue(1);
@@ -133,7 +156,10 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   const handleToggleFollow = () => {
     if (!isAuthenticated) {
-      Alert.alert("Sign In Required", "Please sign in to follow users.");
+      Alert.alert("Sign In Required", "Please sign in to follow users.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign In", onPress: () => router.push("/login" as any) },
+      ]);
       return;
     }
     if (!authorId || isOwner) return;
@@ -145,7 +171,10 @@ export const PostCard: React.FC<PostCardProps> = ({
   // Upvote Handler
   const handleUpvote = async () => {
     if (!isAuthenticated) {
-      Alert.alert("Sign In Required", "Please sign in to vote on posts.");
+      Alert.alert("Sign In Required", "Please sign in to vote on posts.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign In", onPress: () => router.push("/login" as any) },
+      ]);
       return;
     }
 
@@ -169,18 +198,27 @@ export const PostCard: React.FC<PostCardProps> = ({
     }
 
     try {
-      await postService.likePost(postId);
-    } catch {
+      const res = await postService.likePost(postId);
+      if (res && typeof (res as any).likesCount === "number") {
+        setLikesCount((res as any).likesCount);
+      }
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+    } catch (err: any) {
       setIsUpvoted(prevUpvoted);
       setIsDownvoted(prevDownvoted);
       setLikesCount(prevCount);
+      const msg = err?.response?.data?.message || err.message || "Could not vote on post";
+      Alert.alert("Vote Error", msg);
     }
   };
 
   // Downvote Handler
   const handleDownvote = async () => {
     if (!isAuthenticated) {
-      Alert.alert("Sign In Required", "Please sign in to vote on posts.");
+      Alert.alert("Sign In Required", "Please sign in to vote on posts.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign In", onPress: () => router.push("/login" as any) },
+      ]);
       return;
     }
 
@@ -202,7 +240,11 @@ export const PostCard: React.FC<PostCardProps> = ({
         setIsUpvoted(false);
         setLikesCount(Math.max(0, prevCount - 1));
         try {
-          await postService.likePost(postId);
+          const res = await postService.likePost(postId);
+          if (res && typeof (res as any).likesCount === "number") {
+            setLikesCount((res as any).likesCount);
+          }
+          queryClient.invalidateQueries({ queryKey: ["posts"] });
         } catch {
           setIsUpvoted(prevUpvoted);
           setLikesCount(prevCount);
@@ -219,17 +261,7 @@ export const PostCard: React.FC<PostCardProps> = ({
         onPress: async () => {
           await Clipboard.setStringAsync(`https://stalk.com/post/details/${postId}`);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert("Copied", "Post link copied to clipboard.");
-        },
-      },
-      {
-        text: "Save Post",
-        onPress: async () => {
-          try {
-            await postService.savePost(postId);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert("Saved", "Post saved to your bookmarks.");
-          } catch {}
+          Alert.alert("Link Copied", "Post link copied to clipboard!");
         },
       },
     ];
@@ -239,7 +271,7 @@ export const PostCard: React.FC<PostCardProps> = ({
         text: "Delete Post",
         style: "destructive",
         onPress: () => {
-          Alert.alert("Delete Post", "Are you sure you want to delete this post?", [
+          Alert.alert("Delete Post", "Are you sure you want to permanently delete this post?", [
             { text: "Cancel", style: "cancel" },
             {
               text: "Delete",
@@ -249,8 +281,9 @@ export const PostCard: React.FC<PostCardProps> = ({
                   await postService.deletePost(postId);
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   onPostDeleted?.(postId);
+                  queryClient.invalidateQueries({ queryKey: ["posts"] });
                 } catch {
-                  Alert.alert("Error", "Failed to delete post.");
+                  Alert.alert("Error", "Could not delete post.");
                 }
               },
             },
@@ -260,22 +293,21 @@ export const PostCard: React.FC<PostCardProps> = ({
     }
 
     options.push({ text: "Cancel", style: "cancel" });
-
     Alert.alert("Post Options", undefined, options);
   };
 
+  const mediaUri = post.media?.url || post.mediaUrl || "";
+  const isVideo =
+    post.mediaType === "video" ||
+    post.media?.resourceType === "video" ||
+    /\.(mp4|mov|webm|m4v)$/i.test(mediaUri);
+
   const authorName = post.userName || post.user?.fullName || "User";
-  const authorHandle = post.username || post.user?.username || (post.user as any)?.name || "user";
+  const authorHandle = post.username || post.user?.username || authorName.toLowerCase().replace(/\s+/g, "");
   const avatarUri =
     post.userProfilePicture ||
     post.user?.profilePicUrl ||
     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
-
-  const mediaUri = post.media?.url || post.mediaUrl;
-  const isVideo =
-    post.mediaType === "video" || post.media?.resourceType === "video";
-
-  const commentCount = post.commentsCount ?? (post.comments ? post.comments.length : 0);
 
   return (
     <View style={styles.card}>
@@ -343,31 +375,28 @@ export const PostCard: React.FC<PostCardProps> = ({
       {(post.isShare || post.originalPost) && (
         <SharedPostPreview
           originalPost={post.originalPost}
-          onPress={onPressComment}
+          onPress={() => setShowCommentSheet(true)}
         />
       )}
 
-      {/* Media Rendering */}
+      {/* Media Rendering: Facebook-style auto-play video or Image */}
       {mediaUri && !post.isShare ? (
-        <TouchableOpacity
-          style={styles.mediaContainer}
-          activeOpacity={0.9}
-          onPress={onPressComment}
-        >
-          <Image
-            source={{ uri: mediaUri }}
-            style={styles.postMedia}
-            contentFit="cover"
-            transition={200}
-          />
-          {isVideo && (
-            <View style={styles.videoOverlay}>
-              <View style={styles.playCircle}>
-                <Play size={24} color="#FFFFFF" fill="#FFFFFF" />
-              </View>
-            </View>
-          )}
-        </TouchableOpacity>
+        isVideo ? (
+          <FeedVideoPlayer uri={mediaUri} isVisible={isVisible} />
+        ) : (
+          <TouchableOpacity
+            style={styles.mediaContainer}
+            activeOpacity={0.9}
+            onPress={() => setShowCommentSheet(true)}
+          >
+            <Image
+              source={{ uri: mediaUri }}
+              style={styles.postMedia}
+              contentFit="cover"
+              transition={200}
+            />
+          </TouchableOpacity>
+        )
       ) : null}
 
       {/* Action Bar (Reddit/Facebook Hybrid) */}
@@ -414,11 +443,11 @@ export const PostCard: React.FC<PostCardProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Comment Button */}
+        {/* Comment Button (Opens In-Place Comments Drawer) */}
         <TouchableOpacity
           style={styles.actionBtn}
           activeOpacity={0.7}
-          onPress={onPressComment}
+          onPress={() => setShowCommentSheet(true)}
         >
           <MessageCircle size={18} color="#64748B" strokeWidth={2} />
           <Text style={styles.actionText}>
@@ -446,6 +475,14 @@ export const PostCard: React.FC<PostCardProps> = ({
         onClose={() => setShowShareModal(false)}
         onShared={() => setSharesCount((prev) => prev + 1)}
       />
+
+      {/* In-Place Comments Bottom Sheet */}
+      <CommentBottomSheet
+        visible={showCommentSheet}
+        postId={postId}
+        onClose={() => setShowCommentSheet(false)}
+        onCommentAdded={() => setCommentCount((prev) => prev + 1)}
+      />
     </View>
   );
 };
@@ -453,156 +490,135 @@ export const PostCard: React.FC<PostCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    padding: 14,
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: "#F1F5F9",
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
   authorSection: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
-    marginRight: 8,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "#E2E8F0",
   },
   headerInfo: {
-    marginLeft: 10,
+    marginLeft: 12,
     flex: 1,
   },
   authorRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    flexWrap: "wrap",
   },
   authorName: {
     fontSize: 15,
     fontWeight: "700",
     color: "#0F172A",
+    maxWidth: "75%",
   },
   sharedBadge: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#64748B",
     fontStyle: "italic",
   },
   username: {
     fontSize: 12,
     color: "#64748B",
-    marginTop: 1,
+    marginTop: 2,
   },
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   followBtn: {
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 14,
+    borderRadius: 16,
+    borderWidth: 1,
   },
   notFollowingBtn: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#EFF6FF",
+    borderColor: "#3B82F6",
   },
   followingBtn: {
     backgroundColor: "#F1F5F9",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#CBD5E1",
   },
   followBtnText: {
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   notFollowingBtnText: {
-    color: "#FFFFFF",
+    color: "#2563EB",
   },
   followingBtnText: {
-    color: "#475569",
+    color: "#64748B",
   },
   optionsBtn: {
-    padding: 6,
-    borderRadius: 16,
+    padding: 4,
   },
   description: {
-    fontSize: 14.5,
-    lineHeight: 21,
+    fontSize: 15,
     color: "#1E293B",
-    marginBottom: 10,
+    lineHeight: 22,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   mediaContainer: {
     width: "100%",
-    height: 250,
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#F8FAFC",
-    marginBottom: 10,
-    position: "relative",
+    aspectRatio: 16 / 9,
+    backgroundColor: "#0F172A",
   },
   postMedia: {
     width: "100%",
     height: "100%",
   },
-  videoOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0, 0, 0, 0.25)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  playCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingLeft: 4,
-  },
   actions: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    paddingTop: 10,
-    marginTop: 2,
+    borderTopColor: "#F8FAFC",
   },
   votePill: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F1F5F9",
     borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
   },
   voteBtn: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 4,
-    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    gap: 5,
+  },
+  voteDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: "#CBD5E1",
   },
   voteCount: {
     fontSize: 13,
     fontWeight: "700",
     color: "#475569",
-    minWidth: 16,
-    textAlign: "center",
   },
   upvotedText: {
     color: "#2563EB",
@@ -610,26 +626,17 @@ const styles = StyleSheet.create({
   downvotedText: {
     color: "#F43F5E",
   },
-  voteDivider: {
-    width: 1,
-    height: 14,
-    backgroundColor: "#CBD5E1",
-    marginHorizontal: 4,
-  },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 18,
     gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   actionText: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: "600",
     color: "#64748B",
   },
 });
-
-export default PostCard;

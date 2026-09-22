@@ -14,8 +14,8 @@ export const postService = {
     return res.data.data;
   },
 
-  async likePost(postId: string): Promise<{ isLiked: boolean }> {
-    const res = await apiClient.post<{ success: boolean; data: { isLiked: boolean } }>(`/posts/${postId}/like`);
+  async likePost(postId: string): Promise<{ liked: boolean; likesCount: number; isLiked?: boolean }> {
+    const res = await apiClient.post<{ success: boolean; data: { liked: boolean; likesCount: number; isLiked?: boolean } }>(`/posts/${postId}/like`);
     return res.data.data;
   },
 

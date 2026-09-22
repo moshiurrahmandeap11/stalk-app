@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,10 +8,11 @@ import {
   RefreshControl,
   TouchableOpacity,
   StatusBar,
+  ViewToken,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { MessageSquare, Bell, LogIn, Search } from "lucide-react-native";
 import { postService } from "../../services/post.service";
 import { PostCard } from "../../components/post/PostCard";
@@ -22,6 +23,33 @@ export default function FeedScreen() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [page, setPage] = useState(1);
+  const [visiblePostId, setVisiblePostId] = useState<string | null>(null);
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
+
+  // Pause feed video playback when switching away from Feed tab
+  useFocusEffect(
+    useCallback(() => {
+      setIsScreenFocused(true);
+      return () => {
+        setIsScreenFocused(false);
+      };
+    }, [])
+  );
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 60,
+  }).current;
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems && viewableItems.length > 0) {
+        const firstVisible = viewableItems[0]?.item?.id;
+        if (firstVisible) {
+          setVisiblePostId(firstVisible);
+        }
+      }
+    }
+  ).current;
 
   const {
     data,
@@ -106,13 +134,15 @@ export default function FeedScreen() {
           renderItem={({ item }) => (
             <PostCard
               post={item}
+              isVisible={isScreenFocused && visiblePostId === item.id}
               onPressUser={(username) => {
                 if (username) router.push(`/s/${username}` as any);
               }}
-              onPressComment={() => router.push(`/post/${item.id}` as any)}
               onPostDeleted={() => refetch()}
             />
           )}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl

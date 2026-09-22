@@ -7,6 +7,7 @@ import {
   TouchableWithoutFeedback,
   Dimensions,
   Platform,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
@@ -24,13 +25,11 @@ import {
   MessageCircle,
   Share2,
   Bookmark,
-  MoreVertical,
   Volume2,
   VolumeX,
   Play,
   Music,
   Plus,
-  Check,
 } from "lucide-react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -40,16 +39,25 @@ import { postService } from "../../services/post.service";
 import { followService } from "../../services/follow.service";
 import { useAuthStore } from "../../store/auth.store";
 import { ShareModal } from "../post/ShareModal";
+import { CommentBottomSheet } from "../post/CommentBottomSheet";
 
 const { width: WINDOW_WIDTH } = Dimensions.get("window");
 
 interface ReelItemProps {
   post: IPost;
   isActive: boolean;
+  isScreenFocused?: boolean;
+  shouldLoad?: boolean;
   itemHeight: number;
 }
 
-export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }) => {
+export const ReelItem: React.FC<ReelItemProps> = ({
+  post,
+  isActive,
+  isScreenFocused = true,
+  shouldLoad = true,
+  itemHeight,
+}) => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((s) => s.user?.id);
@@ -65,15 +73,16 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
     post.media?.resourceType === "video" ||
     /\.(mp4|mov|webm|m4v)$/i.test(mediaUri);
 
-  // States
+  // Playback & UI States
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showCommentSheet, setShowCommentSheet] = useState(false);
   const [sharesCount, setSharesCount] = useState(post.sharesCount ?? 0);
   const [isSaved, setIsSaved] = useState(false);
   const [showHeartAnim, setShowHeartAnim] = useState(false);
 
-  // Likes state
+  // Upvote / Likes state
   const initialLiked = Boolean(
     (currentUserId && post.likes && post.likes.includes(currentUserId)) ||
       post.isLikedByCurrentUser
@@ -82,9 +91,23 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
   const [likesCount, setLikesCount] = useState(
     post.likesCount ?? (post.likes ? post.likes.length : 0)
   );
+  const [commentCount, setCommentCount] = useState(
+    post.commentsCount ?? (post.comments ? post.comments.length : 0)
+  );
 
   // Double-tap tracker
   const lastTapRef = useRef<number>(0);
+
+  // Sync state when props change
+  useEffect(() => {
+    const liked = Boolean(
+      (currentUserId && post.likes && post.likes.includes(currentUserId)) ||
+        post.isLikedByCurrentUser
+    );
+    setIsLiked(liked);
+    setLikesCount(post.likesCount ?? (post.likes ? post.likes.length : 0));
+    setCommentCount(post.commentsCount ?? (post.comments ? post.comments.length : 0));
+  }, [post.likes, post.likesCount, post.isLikedByCurrentUser, post.commentsCount, currentUserId]);
 
   // Animations
   const likeScale = useSharedValue(1);
@@ -92,23 +115,26 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
   const heartAnimOpacity = useSharedValue(0);
   const playIconOpacity = useSharedValue(0);
 
-  // Video Player instance
-  const player = useVideoPlayer(isVideo ? mediaUri : null, (p) => {
-    p.loop = true;
-    p.muted = isMuted;
-  });
+  // Only instantiate native video player if item is active or adjacent (shouldLoad)
+  const player = useVideoPlayer(
+    isVideo && shouldLoad ? mediaUri : null,
+    (p) => {
+      p.loop = true;
+      p.muted = isMuted;
+    }
+  );
 
-  // Handle active playback
+  // Active playback control: play only when active, screen focused, not manually paused, and comment sheet closed
   useEffect(() => {
     if (!player) return;
-    if (isActive && isPlaying) {
+    if (isActive && isScreenFocused && isPlaying && !showCommentSheet) {
       player.play();
     } else {
       player.pause();
     }
-  }, [isActive, isPlaying, player]);
+  }, [isActive, isScreenFocused, isPlaying, showCommentSheet, player]);
 
-  // Handle mute toggle
+  // Sync mute
   useEffect(() => {
     if (player) {
       player.muted = isMuted;
@@ -123,6 +149,7 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
     staleTime: 60 * 1000,
   });
 
+  // Follow Mutation
   const followMutation = useMutation({
     mutationFn: async (nextStatus: boolean) => {
       if (nextStatus) {
@@ -149,7 +176,10 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
 
   const handleFollowToggle = () => {
     if (!isAuthenticated) {
-      router.push("/login" as any);
+      Alert.alert("Sign In Required", "Please sign in to follow users.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign In", onPress: () => router.push("/login" as any) },
+      ]);
       return;
     }
     if (!authorId || isOwner) return;
@@ -158,8 +188,16 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
     followMutation.mutate(!isFollowing);
   };
 
-  // Like / Upvote action
+  // Upvote / Like Action
   const handleLike = async () => {
+    if (!isAuthenticated) {
+      Alert.alert("Sign In Required", "Please sign in to upvote.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign In", onPress: () => router.push("/login" as any) },
+      ]);
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     likeScale.value = withSequence(
       withSpring(1.4, { damping: 4, stiffness: 300 }),
@@ -173,20 +211,37 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
     setLikesCount(prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1);
 
     try {
-      await postService.likePost(postId);
-    } catch {
+      const res = await postService.likePost(postId);
+      if (res && typeof res.likesCount === "number") {
+        setLikesCount(res.likesCount);
+      }
+      if (res && typeof res.liked === "boolean") {
+        setIsLiked(res.liked);
+      }
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["videoPosts"] });
+    } catch (err: any) {
       setIsLiked(prevLiked);
       setLikesCount(prevCount);
+      const msg = err?.response?.data?.message || err.message || "Could not vote on reel";
+      Alert.alert("Vote Error", msg);
     }
   };
 
-  // Double tap to like with animated heart explosion
+  // Double tap to like with animated heart explosion / Single tap to play/pause
   const handleScreenPress = () => {
     const now = Date.now();
     const DOUBLE_PRESS_DELAY = 300;
 
     if (now - lastTapRef.current < DOUBLE_PRESS_DELAY) {
-      // Double tap!
+      if (!isAuthenticated) {
+        Alert.alert("Sign In Required", "Please sign in to upvote.", [
+          { text: "Cancel", style: "cancel" },
+          { text: "Sign In", onPress: () => router.push("/login" as any) },
+        ]);
+        return;
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (!isLiked) {
         handleLike();
@@ -198,40 +253,47 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
 
       heartAnimScale.value = withSequence(
         withSpring(1.3, { damping: 6, stiffness: 200 }),
-        withTiming(1, { duration: 200 })
+        withTiming(1, { duration: 150 })
       );
+
       heartAnimOpacity.value = withSequence(
-        withTiming(1, { duration: 600 }),
-        withTiming(0, { duration: 300 }, () => {
-          runOnJS(setShowHeartAnim)(false);
+        withTiming(1, { duration: 300 }),
+        withTiming(0, { duration: 300 }, (finished) => {
+          if (finished) {
+            runOnJS(setShowHeartAnim)(false);
+          }
         })
       );
     } else {
-      // Single tap -> toggle play/pause
-      const nextPlaying = !isPlaying;
-      setIsPlaying(nextPlaying);
-      if (player) {
-        if (nextPlaying) player.play();
-        else player.pause();
-      }
-
+      setIsPlaying((prev) => !prev);
       playIconOpacity.value = withSequence(
         withTiming(1, { duration: 150 }),
-        withTiming(0, { duration: 500 })
+        withTiming(0, { duration: 400 })
       );
     }
 
     lastTapRef.current = now;
   };
 
+  // Save Post
   const handleSave = async () => {
-    Haptics.selectionAsync();
+    if (!isAuthenticated) {
+      Alert.alert("Sign In Required", "Please sign in to save reels.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign In", onPress: () => router.push("/login" as any) },
+      ]);
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsSaved(!isSaved);
     try {
       await postService.savePost(postId);
-    } catch {}
+    } catch {
+      setIsSaved(isSaved);
+    }
   };
 
+  // Animated styles
   const likeAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: likeScale.value }],
   }));
@@ -251,8 +313,6 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
     post.userProfilePicture ||
     post.user?.profilePicUrl ||
     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
-
-  const commentCount = post.commentsCount ?? (post.comments ? post.comments.length : 0);
 
   return (
     <View style={[styles.container, { height: itemHeight }]}>
@@ -274,10 +334,6 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
               transition={200}
             />
           )}
-
-          {/* Vignette Gradients */}
-          <View style={styles.topVignette} />
-          <View style={styles.bottomVignette} />
 
           {/* Centered Play / Pause Flash Indicator */}
           <Animated.View style={[styles.centeredPlayIndicator, playOverlayStyle]} pointerEvents="none">
@@ -348,11 +404,11 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
           <Text style={[styles.actionCount, isLiked && styles.likedCount]}>{likesCount}</Text>
         </TouchableOpacity>
 
-        {/* Comment Action */}
+        {/* Comment Action: In-place Bottom Sheet */}
         <TouchableOpacity
           style={styles.actionBtn}
           activeOpacity={0.7}
-          onPress={() => router.push(`/post/${postId}` as any)}
+          onPress={() => setShowCommentSheet(true)}
         >
           <View style={styles.iconCircle}>
             <MessageCircle size={22} color="#FFFFFF" strokeWidth={2} />
@@ -415,6 +471,14 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post, isActive, itemHeight }
         </View>
       </View>
 
+      {/* In-place Comment Drawer Sheet */}
+      <CommentBottomSheet
+        visible={showCommentSheet}
+        postId={postId}
+        onClose={() => setShowCommentSheet(false)}
+        onCommentAdded={() => setCommentCount((prev) => prev + 1)}
+      />
+
       {/* Share Modal */}
       <ShareModal
         visible={showShareModal}
@@ -435,22 +499,6 @@ const styles = StyleSheet.create({
   },
   videoPlayer: {
     ...StyleSheet.absoluteFill,
-  },
-  topVignette: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 120,
-    backgroundColor: "rgba(0, 0, 0, 0.35)",
-  },
-  bottomVignette: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 220,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
   },
   topBar: {
     position: "absolute",
