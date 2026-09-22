@@ -2,6 +2,7 @@ import { io, Socket } from "socket.io-client";
 import { create } from "zustand";
 import { ENV } from "../config/env";
 import { Storage } from "../utils/storage";
+import { useCallStore } from "./call.store";
 
 interface SocketState {
   socket: Socket | null;
@@ -50,6 +51,40 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       set((state) => ({
         onlineUsers: state.onlineUsers.filter((id) => id !== userId),
       }));
+    });
+
+    // WebRTC Call Signaling Listeners
+    socketInstance.on("incoming_call", (data: any) => {
+      useCallStore.getState().setIncomingCall(data);
+    });
+
+    socketInstance.on("call_accepted", () => {
+      useCallStore.setState({ callState: "connected" });
+      const timer = setInterval(() => {
+        useCallStore.getState().tickDuration();
+      }, 1000);
+      (useCallStore as any)._timer = timer;
+    });
+
+    socketInstance.on("call_rejected", () => {
+      useCallStore.setState({ callState: "ended" });
+      setTimeout(() => {
+        useCallStore.getState().resetCall();
+      }, 1200);
+    });
+
+    socketInstance.on("call_ended", () => {
+      useCallStore.setState({ callState: "ended" });
+      setTimeout(() => {
+        useCallStore.getState().resetCall();
+      }, 1200);
+    });
+
+    socketInstance.on("call_busy", () => {
+      useCallStore.setState({ callState: "ended" });
+      setTimeout(() => {
+        useCallStore.getState().resetCall();
+      }, 1500);
     });
 
     set({ socket: socketInstance });

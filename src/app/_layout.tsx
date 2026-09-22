@@ -5,6 +5,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
 import { useAuthStore } from "../store/auth.store";
 import { useSocketStore } from "../store/socket.store";
+import { IncomingCallBanner } from "../components/call/IncomingCallBanner";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -48,7 +49,9 @@ export default function RootLayout() {
           <Stack.Screen name="chat/[id]" />
           <Stack.Screen name="post/[id]" />
           <Stack.Screen name="s/[username]" />
+          <Stack.Screen name="call" options={{ animation: "fade" }} />
         </Stack>
+        <IncomingCallBanner />
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,19 +7,22 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { ArrowLeft, MessageSquare } from "lucide-react-native";
+import { ArrowLeft, MessageSquare, Users, Plus } from "lucide-react-native";
 import { messageService } from "../services/message.service";
 import { IConversation } from "../interfaces/message.interface";
 import { useAuthStore } from "../store/auth.store";
+import { CreateGroupModal } from "../components/chat/CreateGroupModal";
 
 export default function MessagesScreen() {
   const router = useRouter();
   const currentUserId = useAuthStore((s) => s.user?.id);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
 
   const { data: conversations, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["conversations"],
@@ -28,13 +31,22 @@ export default function MessagesScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <ArrowLeft size={22} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chats</Text>
-        <View style={{ width: 38 }} />
+        <TouchableOpacity
+          style={styles.newGroupBtn}
+          activeOpacity={0.7}
+          onPress={() => setShowCreateGroup(true)}
+        >
+          <Users size={18} color="#3B82F6" />
+          <Text style={styles.newGroupBtnText}>New Group</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Conversations List */}
@@ -48,24 +60,46 @@ export default function MessagesScreen() {
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
           renderItem={({ item }) => {
-            const otherParticipant = item.participants.find((p) => p.userId !== currentUserId);
-            const title = item.name || otherParticipant?.userName || "Chat";
+            const isGroup = item.isGroup;
+            const otherParticipant = item.participants?.find((p) => p.userId !== currentUserId);
+            const title = isGroup
+              ? item.name || "Group Chat"
+              : otherParticipant?.userName || "Chat";
             const avatar =
               item.avatar ||
               otherParticipant?.userProfilePicture ||
               "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
 
             const unread = otherParticipant?.unreadCount || item.unreadCount || 0;
-            const targetId = item.isGroup ? item.id : otherParticipant?.userId || item.id;
+            const targetId = isGroup ? item.id : otherParticipant?.userId || item.id;
 
             return (
               <TouchableOpacity
                 style={styles.convItem}
+                activeOpacity={0.7}
                 onPress={() => router.push(`/chat/${targetId}` as any)}
               >
-                <Image source={{ uri: avatar }} style={styles.convAvatar} contentFit="cover" />
+                <View style={styles.avatarWrapper}>
+                  <Image source={{ uri: avatar }} style={styles.convAvatar} contentFit="cover" />
+                  {isGroup ? (
+                    <View style={styles.groupBadge}>
+                      <Users size={10} color="#FFFFFF" />
+                    </View>
+                  ) : null}
+                </View>
                 <View style={styles.convInfo}>
-                  <Text style={styles.convTitle}>{title}</Text>
+                  <View style={styles.titleRow}>
+                    <Text style={styles.convTitle} numberOfLines={1}>
+                      {title}
+                    </Text>
+                    {isGroup ? (
+                      <View style={styles.groupPill}>
+                        <Text style={styles.groupPillText}>
+                          {item.participants?.length || 0} members
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <Text style={styles.convLastMsg} numberOfLines={1}>
                     {item.lastMessage || "No messages yet"}
                   </Text>
@@ -82,11 +116,28 @@ export default function MessagesScreen() {
             <View style={styles.emptyContainer}>
               <MessageSquare size={48} color="#94A3B8" />
               <Text style={styles.emptyTitle}>No conversations yet</Text>
-              <Text style={styles.emptySubtitle}>Start chatting with your friends on Stalk!</Text>
+              <Text style={styles.emptySubtitle}>Start chatting with your friends or create a group!</Text>
+              <TouchableOpacity
+                style={styles.emptyActionBtn}
+                onPress={() => setShowCreateGroup(true)}
+              >
+                <Plus size={18} color="#FFFFFF" />
+                <Text style={styles.emptyActionBtnText}>Create a Group</Text>
+              </TouchableOpacity>
             </View>
           }
         />
       )}
+
+      {/* Create Group Modal */}
+      <CreateGroupModal
+        visible={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+        onGroupCreated={(newGroup: IConversation) => {
+          refetch();
+          router.push(`/chat/${newGroup.id}` as any);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -118,6 +169,22 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0F172A",
   },
+  newGroupBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  newGroupBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
   loadingContainer: {
     flex: 1,
     alignItems: "center",
@@ -132,31 +199,66 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
+  avatarWrapper: {
+    position: "relative",
+  },
   convAvatar: {
     width: 52,
     height: 52,
     borderRadius: 26,
     backgroundColor: "#E2E8F0",
   },
+  groupBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#3B82F6",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+  },
   convInfo: {
     flex: 1,
     marginLeft: 14,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   convTitle: {
     fontSize: 16,
     fontWeight: "700",
     color: "#0F172A",
+    flex: 1,
+  },
+  groupPill: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 6,
+  },
+  groupPillText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#64748B",
   },
   convLastMsg: {
     fontSize: 14,
     color: "#64748B",
-    marginTop: 3,
+    marginTop: 4,
   },
   unreadBadge: {
     backgroundColor: "#3B82F6",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    marginLeft: 8,
   },
   unreadText: {
     color: "#FFFFFF",
@@ -166,7 +268,8 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 100,
+    paddingTop: 80,
+    paddingHorizontal: 24,
   },
   emptyTitle: {
     fontSize: 18,
@@ -178,6 +281,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#64748B",
     marginTop: 4,
+    textAlign: "center",
+  },
+  emptyActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#3B82F6",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 20,
+  },
+  emptyActionBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });
-

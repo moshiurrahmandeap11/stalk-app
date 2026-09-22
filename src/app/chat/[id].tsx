@@ -9,33 +9,54 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { ArrowLeft, Send, Phone, Video } from "lucide-react-native";
+import * as Haptics from "expo-haptics";
+import {
+  ArrowLeft,
+  Send,
+  Phone,
+  Video,
+  Users,
+} from "lucide-react-native";
 import { messageService } from "../../services/message.service";
 import { userService } from "../../services/user.service";
 import { useAuthStore } from "../../store/auth.store";
 import { useSocketStore } from "../../store/socket.store";
-import { IMessage } from "../../interfaces/message.interface";
+import { useCallStore } from "../../store/call.store";
+import { IMessage, IMessageReaction } from "../../interfaces/message.interface";
+import { ReactionPicker } from "../../components/chat/ReactionPicker";
 
 export default function ChatScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>(); // target user id or conv id
   const currentUserId = useAuthStore((s) => s.user?.id);
   const { socket, onlineUsers } = useSocketStore();
+  const { startCall } = useCallStore();
 
   const [inputText, setInputText] = useState("");
   const [messages, setMessages] = useState<IMessage[]>([]);
+  const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
-  // Fetch receiver info
+  // Check if conversation exists (e.g. group chat)
+  const { data: conversations } = useQuery({
+    queryKey: ["conversations"],
+    queryFn: () => messageService.getConversations(),
+  });
+
+  const currentConv = conversations?.find((c) => c.id === id);
+  const isGroup = Boolean(currentConv?.isGroup);
+
+  // Fetch receiver info for 1-on-1 chat
   const { data: targetUser } = useQuery({
     queryKey: ["targetUser", id],
     queryFn: () => userService.getUserById(id!),
-    enabled: !!id,
+    enabled: !!id && !isGroup,
   });
 
   // Fetch message history
@@ -51,7 +72,17 @@ export default function ChatScreen() {
     }
   }, [initialMessages]);
 
-  // Real-time socket message listener
+  // Mark messages as read
+  useEffect(() => {
+    if (id) {
+      messageService.markAsRead(id);
+      if (socket?.connected) {
+        socket.emit("mark_as_read", { senderId: id });
+      }
+    }
+  }, [id, socket]);
+
+  // Real-time socket message and reaction listeners
   useEffect(() => {
     if (!socket) return;
 
@@ -62,16 +93,27 @@ export default function ChatScreen() {
       }
     };
 
-    socket.on("receive_message", handleReceive);
-    socket.on("message_sent", (sentMsg: IMessage) => {
+    const handleMessageSent = (sentMsg: IMessage) => {
       setMessages((prev) => {
         const withoutTemp = prev.filter((m) => m.tempId !== sentMsg.tempId);
         return [...withoutTemp, sentMsg];
       });
-    });
+    };
+
+    const handleReaction = (data: { messageId: string; reactions: IMessageReaction[] }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === data.messageId ? { ...m, reactions: data.reactions } : m))
+      );
+    };
+
+    socket.on("receive_message", handleReceive);
+    socket.on("message_sent", handleMessageSent);
+    socket.on("message_reaction", handleReaction);
 
     return () => {
       socket.off("receive_message", handleReceive);
+      socket.off("message_sent", handleMessageSent);
+      socket.off("message_reaction", handleReaction);
     };
   }, [socket, id]);
 
@@ -89,6 +131,7 @@ export default function ChatScreen() {
       isRead: false,
       isDelivered: false,
       createdAt: new Date().toISOString(),
+      reactions: [],
     };
 
     setMessages((prev) => [...prev, optimisticMsg]);
@@ -111,15 +154,75 @@ export default function ChatScreen() {
         setMessages((prev) => prev.map((m) => (m.tempId === tempId ? saved : m)));
       }
     } catch {
-      // Keep optimistic message or mark failed
+      // Optimistic message remains
     }
   };
 
+  const handleSelectReaction = async (emoji: string) => {
+    if (!selectedMsgId) return;
+    const msgId = selectedMsgId;
+    setSelectedMsgId(null);
+
+    // Optimistic reaction update
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== msgId) return m;
+        const currentReactions = m.reactions || [];
+        const existingIdx = currentReactions.findIndex((r) => r.userId === currentUserId);
+        let nextReactions = [...currentReactions];
+        if (existingIdx >= 0) {
+          if (nextReactions[existingIdx].reaction === emoji) {
+            nextReactions.splice(existingIdx, 1);
+          } else {
+            nextReactions[existingIdx] = { ...nextReactions[existingIdx], reaction: emoji };
+          }
+        } else {
+          nextReactions.push({
+            id: `temp_${Date.now()}`,
+            messageId: msgId,
+            userId: currentUserId || "me",
+            userName: "Me",
+            reaction: emoji,
+            createdAt: new Date().toISOString(),
+          });
+        }
+        return { ...m, reactions: nextReactions };
+      })
+    );
+
+    try {
+      if (socket?.connected) {
+        socket.emit("react_message", { messageId: msgId, reaction: emoji });
+      }
+      await messageService.toggleReaction(msgId, emoji);
+    } catch {
+      // Non-blocking
+    }
+  };
+
+  const handleStartCall = (type: "audio" | "video") => {
+    if (isGroup) {
+      Alert.alert("Group Call", "Group calling will be available in an upcoming update!");
+      return;
+    }
+    const partnerId = targetUser?.id || id!;
+    const partnerName = targetUser?.fullName || "Friend";
+    const partnerAvatar =
+      targetUser?.avatar || targetUser?.profilePicUrl || undefined;
+
+    startCall({ id: partnerId, name: partnerName, avatar: partnerAvatar }, type);
+    router.push("/call" as any);
+  };
+
   const isOnline = onlineUsers.includes(id || "");
-  const avatarUri =
-    targetUser?.avatar ||
-    targetUser?.profilePicUrl ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+  const chatTitle = isGroup
+    ? currentConv?.name || "Group Chat"
+    : targetUser?.fullName || "Chat";
+  const avatarUri = isGroup
+    ? currentConv?.avatar || "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150"
+    : targetUser?.avatar ||
+      targetUser?.profilePicUrl ||
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -133,23 +236,47 @@ export default function ChatScreen() {
           style={styles.headerUser}
           activeOpacity={0.8}
           onPress={() => {
-            if (targetUser?.username) router.push(`/s/${targetUser.username}` as any);
+            if (!isGroup && targetUser?.username) {
+              router.push(`/s/${targetUser.username}` as any);
+            }
           }}
         >
-          <Image source={{ uri: avatarUri }} style={styles.headerAvatar} contentFit="cover" />
+          <View style={styles.avatarWrapper}>
+            <Image source={{ uri: avatarUri }} style={styles.headerAvatar} contentFit="cover" />
+            {isGroup ? (
+              <View style={styles.groupBadge}>
+                <Users size={10} color="#FFFFFF" />
+              </View>
+            ) : null}
+          </View>
           <View style={styles.headerText}>
-            <Text style={styles.headerName}>{targetUser?.fullName || "Chat"}</Text>
-            <Text style={[styles.headerStatus, isOnline && styles.onlineText]}>
-              {isOnline ? "Online" : "Offline"}
+            <Text style={styles.headerName} numberOfLines={1}>
+              {chatTitle}
+            </Text>
+            <Text style={[styles.headerStatus, !isGroup && isOnline && styles.onlineText]}>
+              {isGroup
+                ? `${currentConv?.participants?.length || 0} members`
+                : isOnline
+                ? "Online"
+                : "Offline"}
             </Text>
           </View>
         </TouchableOpacity>
 
+        {/* Audio & Video Call Buttons */}
         <View style={styles.callActions}>
-          <TouchableOpacity style={styles.callBtn}>
+          <TouchableOpacity
+            style={styles.callBtn}
+            activeOpacity={0.7}
+            onPress={() => handleStartCall("audio")}
+          >
             <Phone size={20} color="#3B82F6" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.callBtn}>
+          <TouchableOpacity
+            style={styles.callBtn}
+            activeOpacity={0.7}
+            onPress={() => handleStartCall("video")}
+          >
             <Video size={20} color="#3B82F6" />
           </TouchableOpacity>
         </View>
@@ -171,12 +298,81 @@ export default function ChatScreen() {
             keyExtractor={(item) => item.id || item.tempId || String(Math.random())}
             renderItem={({ item }) => {
               const isMine = item.senderId === currentUserId;
+              const reactions = item.reactions || [];
+
+              // Group reactions by emoji: { '❤️': 2, '🔥': 1 }
+              const reactionCounts: { [emoji: string]: number } = {};
+              reactions.forEach((r: IMessageReaction) => {
+                reactionCounts[r.reaction] = (reactionCounts[r.reaction] || 0) + 1;
+              });
+              const reactionEntries = Object.entries(reactionCounts);
+
               return (
                 <View style={[styles.bubbleWrapper, isMine ? styles.myWrapper : styles.theirWrapper]}>
-                  <View style={[styles.bubble, isMine ? styles.myBubble : styles.theirBubble]}>
-                    <Text style={[styles.bubbleText, isMine ? styles.myBubbleText : styles.theirBubbleText]}>
-                      {item.message}
-                    </Text>
+                  {/* In group chats, show other member's avatar */}
+                  {isGroup && !isMine ? (
+                    <Image
+                      source={{
+                        uri:
+                          item.senderProfilePicture ||
+                          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
+                      }}
+                      style={styles.senderAvatar}
+                      contentFit="cover"
+                    />
+                  ) : null}
+
+                  <View style={{ maxWidth: "80%" }}>
+                    {/* In group chats, show sender's name */}
+                    {isGroup && !isMine ? (
+                      <Text style={styles.senderName}>{item.senderName || "Member"}</Text>
+                    ) : null}
+
+                    {/* Message Bubble with Long-Press for Telegram Reactions */}
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onLongPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setSelectedMsgId(item.id || item.tempId || null);
+                      }}
+                      style={[styles.bubble, isMine ? styles.myBubble : styles.theirBubble]}
+                    >
+                      <Text
+                        style={[
+                          styles.bubbleText,
+                          isMine ? styles.myBubbleText : styles.theirBubbleText,
+                        ]}
+                      >
+                        {item.message}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Telegram-style Emoji Reaction Pills */}
+                    {reactionEntries.length > 0 ? (
+                      <View
+                        style={[
+                          styles.reactionPillsContainer,
+                          isMine ? styles.reactionPillsRight : styles.reactionPillsLeft,
+                        ]}
+                      >
+                        {reactionEntries.map(([emoji, count]) => (
+                          <TouchableOpacity
+                            key={emoji}
+                            style={styles.reactionPill}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              setSelectedMsgId(item.id || item.tempId || null);
+                              handleSelectReaction(emoji);
+                            }}
+                          >
+                            <Text style={styles.reactionEmoji}>{emoji}</Text>
+                            {count > 1 ? (
+                              <Text style={styles.reactionCount}>{count}</Text>
+                            ) : null}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
                 </View>
               );
@@ -205,6 +401,13 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Telegram Emoji Reaction Picker */}
+      <ReactionPicker
+        visible={Boolean(selectedMsgId)}
+        onDismiss={() => setSelectedMsgId(null)}
+        onSelectReaction={handleSelectReaction}
+      />
     </SafeAreaView>
   );
 }
@@ -219,18 +422,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#E2E8F0",
   },
   backBtn: {
-    padding: 8,
-    marginRight: 4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerUser: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    marginLeft: 4,
+  },
+  avatarWrapper: {
+    position: "relative",
   },
   headerAvatar: {
     width: 40,
@@ -238,8 +449,22 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#E2E8F0",
   },
+  groupBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#3B82F6",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+  },
   headerText: {
     marginLeft: 10,
+    flex: 1,
   },
   headerName: {
     fontSize: 16,
@@ -248,7 +473,8 @@ const styles = StyleSheet.create({
   },
   headerStatus: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#94A3B8",
+    marginTop: 1,
   },
   onlineText: {
     color: "#10B981",
@@ -257,7 +483,7 @@ const styles = StyleSheet.create({
   callActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
   },
   callBtn: {
     width: 38,
@@ -274,11 +500,13 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     gap: 8,
   },
   bubbleWrapper: {
     flexDirection: "row",
+    alignItems: "flex-end",
+    marginVertical: 3,
   },
   myWrapper: {
     justifyContent: "flex-end",
@@ -286,11 +514,29 @@ const styles = StyleSheet.create({
   theirWrapper: {
     justifyContent: "flex-start",
   },
+  senderAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 8,
+    marginBottom: 4,
+  },
+  senderName: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#3B82F6",
+    marginBottom: 2,
+    marginLeft: 4,
+  },
   bubble: {
-    maxWidth: "75%",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   myBubble: {
     backgroundColor: "#3B82F6",
@@ -300,11 +546,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#F1F5F9",
   },
   bubbleText: {
     fontSize: 15,
-    lineHeight: 20,
+    lineHeight: 21,
   },
   myBubbleText: {
     color: "#FFFFFF",
@@ -312,14 +558,51 @@ const styles = StyleSheet.create({
   theirBubbleText: {
     color: "#0F172A",
   },
+  reactionPillsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: -8,
+  },
+  reactionPillsRight: {
+    alignSelf: "flex-end",
+  },
+  reactionPillsLeft: {
+    alignSelf: "flex-start",
+  },
+  reactionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    gap: 3,
+  },
+  reactionEmoji: {
+    fontSize: 13,
+  },
+  reactionCount: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#475569",
+  },
   inputBar: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
+    gap: 8,
   },
   inputField: {
     flex: 1,
@@ -338,10 +621,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#3B82F6",
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
   },
   sendBtnDisabled: {
     backgroundColor: "#94A3B8",
+    opacity: 0.5,
   },
 });
-
