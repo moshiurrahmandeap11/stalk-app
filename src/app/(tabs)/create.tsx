@@ -37,6 +37,8 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { postService } from "../../services/post.service";
 import { useAuthStore } from "../../store/auth.store";
+import { Storage } from "../../utils/storage";
+import { prependToFeedCache } from "../../utils/feedCache";
 
 const TRENDING_HASHTAGS = [
   "#stalk",
@@ -86,10 +88,7 @@ export default function CreatePostTabScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes:
-        mediaType === "images"
-          ? ImagePicker.MediaTypeOptions.Images
-          : ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: mediaType === "images" ? ["images"] : ["videos"],
       allowsEditing: true,
       quality: 0.85,
     });
@@ -110,7 +109,7 @@ export default function CreatePostTabScreen() {
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       quality: 0.85,
     });
@@ -195,7 +194,20 @@ export default function CreatePostTabScreen() {
         formData.append("media", fileObj);
       }
 
-      await postService.createPost(formData);
+      const newPost = await postService.createPost(formData);
+
+      if (newPost) {
+        queryClient.setQueryData(["posts", 1], (old: any) => {
+          if (!old?.data) return { data: [newPost], meta: { total: 1, page: 1 } };
+          return {
+            ...old,
+            data: [newPost, ...old.data.filter((p: any) => p.id !== newPost.id)],
+            meta: { ...old.meta, total: (old.meta?.total || 0) + 1 },
+          };
+        });
+
+        await prependToFeedCache(newPost);
+      }
 
       await queryClient.invalidateQueries({ queryKey: ["posts"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

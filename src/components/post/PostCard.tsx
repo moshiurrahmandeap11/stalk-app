@@ -33,6 +33,8 @@ import { SharedPostPreview } from "./SharedPostPreview";
 import { ShareModal } from "./ShareModal";
 import { CommentBottomSheet } from "./CommentBottomSheet";
 import { FeedVideoPlayer } from "./FeedVideoPlayer";
+import { getMediaUrl } from "../../utils/media";
+import { updateFeedCacheItem } from "../../utils/feedCache";
 
 interface PostCardProps {
   post: IPost;
@@ -170,7 +172,7 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   // Upvote Handler
   const handleUpvote = async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !currentUserId) {
       Alert.alert("Sign In Required", "Please sign in to vote on posts.", [
         { text: "Cancel", style: "cancel" },
         { text: "Sign In", onPress: () => router.push("/login" as any) },
@@ -188,25 +190,60 @@ export const PostCard: React.FC<PostCardProps> = ({
     const prevDownvoted = isDownvoted;
     const prevCount = likesCount;
 
-    if (prevUpvoted) {
-      setIsUpvoted(false);
-      setLikesCount(Math.max(0, prevCount - 1));
-    } else {
-      setIsUpvoted(true);
-      setIsDownvoted(false);
-      setLikesCount(prevDownvoted ? prevCount + 2 : prevCount + 1);
-    }
+    const nextUpvoted = !prevUpvoted;
+    const nextDownvoted = false;
+    const nextCount = prevUpvoted
+      ? Math.max(0, prevCount - 1)
+      : prevDownvoted
+      ? prevCount + 2
+      : prevCount + 1;
+
+    setIsUpvoted(nextUpvoted);
+    setIsDownvoted(nextDownvoted);
+    setLikesCount(nextCount);
+
+    // Instant optimistic update across all active feed queries
+    queryClient.setQueriesData({ queryKey: ["posts"] }, (old: any) => {
+      if (!old || !old.data || !Array.isArray(old.data)) return old;
+      return {
+        ...old,
+        data: old.data.map((p: any) => {
+          const pId = p.id || p._id;
+          if (pId === postId) {
+            return {
+              ...p,
+              isLikedByCurrentUser: nextUpvoted,
+              likesCount: nextCount,
+              likes: nextUpvoted
+                ? [...(p.likes || []).filter((id: string) => id !== currentUserId), currentUserId]
+                : (p.likes || []).filter((id: string) => id !== currentUserId),
+            };
+          }
+          return p;
+        }),
+      };
+    });
+
+    // Persist to local disk feed cache
+    updateFeedCacheItem(postId, (p) => ({
+      ...p,
+      isLikedByCurrentUser: nextUpvoted,
+      likesCount: nextCount,
+      likes: nextUpvoted
+        ? [...(p.likes || []).filter((id: string) => id !== currentUserId), currentUserId]
+        : (p.likes || []).filter((id: string) => id !== currentUserId),
+    }));
 
     try {
       const res = await postService.likePost(postId);
       if (res && typeof (res as any).likesCount === "number") {
         setLikesCount((res as any).likesCount);
       }
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
     } catch (err: any) {
       setIsUpvoted(prevUpvoted);
       setIsDownvoted(prevDownvoted);
       setLikesCount(prevCount);
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
       const msg = err?.response?.data?.message || err.message || "Could not vote on post";
       Alert.alert("Vote Error", msg);
     }
@@ -214,7 +251,7 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   // Downvote Handler
   const handleDownvote = async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !currentUserId) {
       Alert.alert("Sign In Required", "Please sign in to vote on posts.", [
         { text: "Cancel", style: "cancel" },
         { text: "Sign In", onPress: () => router.push("/login" as any) },
@@ -237,17 +274,45 @@ export const PostCard: React.FC<PostCardProps> = ({
     } else {
       setIsDownvoted(true);
       if (prevUpvoted) {
+        const nextCount = Math.max(0, prevCount - 1);
         setIsUpvoted(false);
-        setLikesCount(Math.max(0, prevCount - 1));
+        setLikesCount(nextCount);
+
+        queryClient.setQueriesData({ queryKey: ["posts"] }, (old: any) => {
+          if (!old || !old.data || !Array.isArray(old.data)) return old;
+          return {
+            ...old,
+            data: old.data.map((p: any) => {
+              const pId = p.id || p._id;
+              if (pId === postId) {
+                return {
+                  ...p,
+                  isLikedByCurrentUser: false,
+                  likesCount: nextCount,
+                  likes: (p.likes || []).filter((id: string) => id !== currentUserId),
+                };
+              }
+              return p;
+            }),
+          };
+        });
+
+        updateFeedCacheItem(postId, (p) => ({
+          ...p,
+          isLikedByCurrentUser: false,
+          likesCount: nextCount,
+          likes: (p.likes || []).filter((id: string) => id !== currentUserId),
+        }));
+
         try {
           const res = await postService.likePost(postId);
           if (res && typeof (res as any).likesCount === "number") {
             setLikesCount((res as any).likesCount);
           }
-          queryClient.invalidateQueries({ queryKey: ["posts"] });
         } catch {
           setIsUpvoted(prevUpvoted);
           setLikesCount(prevCount);
+          queryClient.invalidateQueries({ queryKey: ["posts"] });
         }
       }
     }
@@ -296,7 +361,8 @@ export const PostCard: React.FC<PostCardProps> = ({
     Alert.alert("Post Options", undefined, options);
   };
 
-  const mediaUri = post.media?.url || post.mediaUrl || "";
+  const rawMediaUri = post.media?.url || post.mediaUrl || "";
+  const mediaUri = getMediaUrl(rawMediaUri);
   const isVideo =
     post.mediaType === "video" ||
     post.media?.resourceType === "video" ||
@@ -304,10 +370,11 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   const authorName = post.userName || post.user?.fullName || "User";
   const authorHandle = post.username || post.user?.username || authorName.toLowerCase().replace(/\s+/g, "");
-  const avatarUri =
+  const avatarUri = getMediaUrl(
     post.userProfilePicture ||
     post.user?.profilePicUrl ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
+  );
 
   return (
     <View style={styles.card}>
@@ -473,7 +540,20 @@ export const PostCard: React.FC<PostCardProps> = ({
         visible={showShareModal}
         post={post}
         onClose={() => setShowShareModal(false)}
-        onShared={() => setSharesCount((prev) => prev + 1)}
+        onShared={() => {
+          const nextCount = sharesCount + 1;
+          setSharesCount(nextCount);
+          queryClient.setQueriesData({ queryKey: ["posts"] }, (old: any) => {
+            if (!old || !old.data || !Array.isArray(old.data)) return old;
+            return {
+              ...old,
+              data: old.data.map((p: any) =>
+                (p.id || p._id) === postId ? { ...p, sharesCount: nextCount } : p
+              ),
+            };
+          });
+          updateFeedCacheItem(postId, (p) => ({ ...p, sharesCount: nextCount }));
+        }}
       />
 
       {/* In-Place Comments Bottom Sheet */}
@@ -481,7 +561,20 @@ export const PostCard: React.FC<PostCardProps> = ({
         visible={showCommentSheet}
         postId={postId}
         onClose={() => setShowCommentSheet(false)}
-        onCommentAdded={() => setCommentCount((prev) => prev + 1)}
+        onCommentAdded={() => {
+          const nextCount = commentCount + 1;
+          setCommentCount(nextCount);
+          queryClient.setQueriesData({ queryKey: ["posts"] }, (old: any) => {
+            if (!old || !old.data || !Array.isArray(old.data)) return old;
+            return {
+              ...old,
+              data: old.data.map((p: any) =>
+                (p.id || p._id) === postId ? { ...p, commentsCount: nextCount } : p
+              ),
+            };
+          });
+          updateFeedCacheItem(postId, (p) => ({ ...p, commentsCount: nextCount }));
+        }}
       />
     </View>
   );

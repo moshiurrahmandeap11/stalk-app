@@ -17,9 +17,36 @@ export const userService = {
     return res.data.data;
   },
 
+  async updateUser(userId: string, data: Partial<IUser>): Promise<IUser> {
+    const res = await apiClient.patch<{ success: boolean; data: IUser }>(`/users/${userId}`, data);
+    return res.data.data;
+  },
+
+  async uploadProfilePic(formData: FormData): Promise<{ profilePicUrl: string }> {
+    const res = await apiClient.post<{ success: boolean; data: { profilePicUrl: string } }>(
+      "/users/upload-profile-pic",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    );
+    return res.data.data;
+  },
+
+  async uploadCoverPhoto(formData: FormData): Promise<{ coverPhotoUrl: string }> {
+    const res = await apiClient.post<{ success: boolean; data: { coverPhotoUrl: string } }>(
+      "/users/upload-cover-photo",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    );
+    return res.data.data;
+  },
+
   async toggleFollow(targetUserId: string): Promise<{ isFollowing: boolean }> {
     const res = await apiClient.post<{ success: boolean; data: { isFollowing: boolean } }>(
-      `/follow/${targetUserId}`
+      `/follow/follow/${targetUserId}`
     );
     return res.data.data;
   },

@@ -11,6 +11,8 @@ interface AuthState {
   setAuth: (user: IUser, token: string, refreshToken?: string) => Promise<void>;
   setTokens: (accessToken: string, refreshToken?: string) => Promise<void>;
   restoreSession: () => Promise<void>;
+  updateUser: (updatedUser: IUser) => Promise<void>;
+  refreshUser: () => Promise<IUser | null>;
   logout: () => Promise<void>;
 }
 
@@ -35,6 +37,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await Storage.setItem("refreshToken", refreshToken);
     }
     set({ accessToken });
+  },
+
+  async updateUser(updatedUser: IUser) {
+    await Storage.setItem("user", JSON.stringify(updatedUser));
+    set({ user: updatedUser });
+  },
+
+  async refreshUser() {
+    try {
+      const freshUser = await authService.getMe();
+      if (freshUser) {
+        await Storage.setItem("user", JSON.stringify(freshUser));
+        set({ user: freshUser });
+        return freshUser;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   },
 
   async restoreSession() {

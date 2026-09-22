@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ViewToken,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Image } from "expo-image";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useFocusEffect } from "expo-router";
 import { MessageSquare, Bell, LogIn, Search } from "lucide-react-native";
@@ -18,6 +19,8 @@ import { postService } from "../../services/post.service";
 import { PostCard } from "../../components/post/PostCard";
 import { useAuthStore } from "../../store/auth.store";
 import { IPost } from "../../interfaces/post.interface";
+import { getFeedCache, setFeedCache } from "../../utils/feedCache";
+import { getMediaUrl } from "../../utils/media";
 
 export default function FeedScreen() {
   const router = useRouter();
@@ -25,6 +28,16 @@ export default function FeedScreen() {
   const [page, setPage] = useState(1);
   const [visiblePostId, setVisiblePostId] = useState<string | null>(null);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
+  const [cachedPosts, setCachedPosts] = useState<IPost[]>([]);
+
+  // Facebook-style instant feed preload from local cache
+  useEffect(() => {
+    getFeedCache().then((cached) => {
+      if (cached && cached.length > 0) {
+        setCachedPosts(cached);
+      }
+    });
+  }, []);
 
   // Pause feed video playback when switching away from Feed tab
   useFocusEffect(
@@ -60,10 +73,33 @@ export default function FeedScreen() {
     refetch,
   } = useQuery({
     queryKey: ["posts", page],
-    queryFn: () => postService.getFeedPosts(page, 15),
+    queryFn: async () => {
+      const res = await postService.getFeedPosts(page, 15);
+      if (page === 1 && res?.data && res.data.length > 0) {
+        // Persist to local disk feed cache
+        setFeedCache(res.data);
+        // Prefetch top images for lag-free scrolling
+        res.data.slice(0, 5).forEach((p) => {
+          const rawUri = p.media?.url || p.mediaUrl;
+          if (rawUri && !/\.(mp4|mov|webm|m4v)$/i.test(rawUri)) {
+            Image.prefetch(getMediaUrl(rawUri)).catch(() => {});
+          }
+        });
+      }
+      return res;
+    },
+    placeholderData: (prev) => prev,
   });
 
-  const posts: IPost[] = data?.data || [];
+  // Use fresh query data when loaded, or cached posts instantly while fetching
+  const posts: IPost[] =
+    data?.data && data.data.length > 0
+      ? data.data
+      : cachedPosts.length > 0
+      ? cachedPosts
+      : [];
+
+  const showInitialLoading = isLoading && posts.length === 0;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -112,7 +148,7 @@ export default function FeedScreen() {
       </View>
 
       {/* Posts Feed */}
-      {isLoading ? (
+      {showInitialLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3B82F6" />
           <Text style={styles.loadingText}>Loading feed...</Text>

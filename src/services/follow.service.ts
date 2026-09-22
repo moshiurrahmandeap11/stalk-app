@@ -1,4 +1,5 @@
 import { apiClient } from "./api.client";
+import { IUser } from "../interfaces/user.interface";
 
 export interface IFollowResponse {
   isFollowing: boolean;
@@ -61,6 +62,28 @@ export const followService = {
       return 0;
     } catch {
       return 0;
+    }
+  },
+
+  async getFollowers(userId: string): Promise<IUser[]> {
+    try {
+      const res = await apiClient.get<{ success: boolean; data: IUser[] }>(
+        `/follow/followers/${userId}`
+      );
+      return res.data?.data || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getFollowing(userId: string): Promise<IUser[]> {
+    try {
+      const res = await apiClient.get<{ success: boolean; data: IUser[] }>(
+        `/follow/following/${userId}`
+      );
+      return res.data?.data || [];
+    } catch {
+      return [];
     }
   },
 };
