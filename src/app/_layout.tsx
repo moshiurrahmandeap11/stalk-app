@@ -1,8 +1,6 @@
 import React, { useEffect } from "react";
-import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { DarkTheme, DefaultTheme, ThemeProvider, Stack } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
 import { useAuthStore } from "../store/auth.store";
