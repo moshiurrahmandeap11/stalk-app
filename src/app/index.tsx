@@ -27,6 +27,8 @@ export default function FeedScreen() {
     data,
     isLoading,
     isRefetching,
+    isError,
+    error,
     refetch,
   } = useQuery({
     queryKey: ["posts", page],
@@ -79,6 +81,16 @@ export default function FeedScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3B82F6" />
           <Text style={styles.loadingText}>Loading feed...</Text>
+        </View>
+      ) : isError ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>Could not load feed</Text>
+          <Text style={styles.emptySubtitle}>
+            {error instanceof Error ? error.message : "Unable to reach server. Check Wi-Fi."}
+          </Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -204,5 +216,17 @@ const styles = StyleSheet.create({
     color: "#64748B",
     textAlign: "center",
     marginTop: 6,
+  },
+  retryBtn: {
+    marginTop: 16,
+    backgroundColor: "#3B82F6",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 14,
   },
 });
