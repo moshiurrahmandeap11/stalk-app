@@ -46,7 +46,7 @@ export default function LoginScreen() {
       if (user && token) {
         await setAuth(user, token);
         await connectSocket();
-        router.replace("/");
+        router.replace("/(tabs)" as any);
       } else {
         Alert.alert("Login Failed", "Unexpected server response.");
       }

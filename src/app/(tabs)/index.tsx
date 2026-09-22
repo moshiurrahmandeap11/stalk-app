@@ -12,11 +12,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { MessageSquare, Bell, LogIn, Plus } from "lucide-react-native";
-import { postService } from "../services/post.service";
-import { PostCard } from "../components/post/PostCard";
-import { useAuthStore } from "../store/auth.store";
-import { IPost } from "../interfaces/post.interface";
+import { MessageSquare, Bell, LogIn } from "lucide-react-native";
+import { postService } from "../../services/post.service";
+import { PostCard } from "../../components/post/PostCard";
+import { useAuthStore } from "../../store/auth.store";
+import { IPost } from "../../interfaces/post.interface";
 
 export default function FeedScreen() {
   const router = useRouter();
@@ -199,6 +199,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingVertical: 12,
+    paddingBottom: 24,
   },
   emptyContainer: {
     alignItems: "center",
@@ -230,3 +231,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+

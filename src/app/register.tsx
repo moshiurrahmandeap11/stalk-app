@@ -50,7 +50,7 @@ export default function RegisterScreen() {
       if (user && token) {
         await setAuth(user, token);
         await connectSocket();
-        router.replace("/");
+        router.replace("/(tabs)" as any);
       } else {
         Alert.alert("Registration Success", "Account created! Please sign in.");
         router.replace("/login");
