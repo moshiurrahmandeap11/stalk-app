@@ -11,12 +11,7 @@ const getDevHost = () => {
     }
   }
 
-  // 2. Fallback for Android emulator
-  if (Platform.OS === "android") {
-    return "http://192.168.0.200:6969";
-  }
-
-  // 3. Default to current local network IP or localhost
+  // 2. Default to current local network IP (reachable by physical phones on same Wi-Fi)
   return "http://192.168.0.200:6969";
 };
 
