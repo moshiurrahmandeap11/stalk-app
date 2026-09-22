@@ -47,3 +47,4 @@ export interface IPost {
   createdAt: string;
   updatedAt?: string;
 }
+

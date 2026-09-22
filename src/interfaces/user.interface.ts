@@ -25,3 +25,4 @@ export interface IUser {
   followingCount?: number;
   friendsCount?: number;
 }
+

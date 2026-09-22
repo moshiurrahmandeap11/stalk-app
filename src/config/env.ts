@@ -13,3 +13,4 @@ export const ENV = {
   SOCKET_URL: process.env.EXPO_PUBLIC_SOCKET_URL || getDevHost(),
   API_PREFIX: "/api/v1",
 };
+

@@ -24,3 +24,4 @@ export const userService = {
     return res.data.data;
   },
 };
+
