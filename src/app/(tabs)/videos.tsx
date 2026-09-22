@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,19 +6,30 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
-  RefreshControl,
   StatusBar,
+  Dimensions,
+  Platform,
+  ViewToken,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { Image } from "expo-image";
-import { Play, Heart, MessageCircle, Share2, Film } from "lucide-react-native";
+import { Film, Camera, RefreshCw } from "lucide-react-native";
+import * as Haptics from "expo-haptics";
 import { postService } from "../../services/post.service";
 import { IPost } from "../../interfaces/post.interface";
+import { ReelItem } from "../../components/video/ReelItem";
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function VideosTabScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  // Height of each reel item equals screen height minus the bottom tab bar
+  const bottomBarHeight = 60 + Math.max(insets.bottom, 8);
+  const reelHeight = SCREEN_HEIGHT - bottomBarHeight;
 
   const {
     data,
@@ -28,250 +39,211 @@ export default function VideosTabScreen() {
   } = useQuery({
     queryKey: ["videoPosts"],
     queryFn: async () => {
-      const res = await postService.getFeedPosts(1, 30);
-      // Filter for posts containing video
-      return res.data.filter(
+      const res = await postService.getFeedPosts(1, 40);
+      const allPosts = res.data || [];
+
+      // Prioritize video posts, but if few or none, also include media posts so feed is active
+      const videos = allPosts.filter(
         (p) =>
           p.mediaType === "video" ||
           p.media?.resourceType === "video" ||
-          (p.mediaUrl && /\.(mp4|mov|webm|avi|mkv)$/i.test(p.mediaUrl))
+          /\.(mp4|mov|webm|m4v)$/i.test(p.media?.url || p.mediaUrl || "")
       );
+
+      if (videos.length > 0) return videos;
+      return allPosts.filter((p) => p.media?.url || p.mediaUrl);
     },
   });
 
-  const videoPosts: IPost[] = data || [];
+  const reels: IPost[] = data || [];
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems && viewableItems.length > 0 && viewableItems[0].index !== null) {
+        setActiveIndex(viewableItems[0].index);
+      }
+    }
+  ).current;
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 60,
+  }).current;
+
+  const renderItem = useCallback(
+    ({ item, index }: { item: IPost; index: number }) => (
+      <ReelItem
+        post={item}
+        isActive={index === activeIndex}
+        itemHeight={reelHeight}
+      />
+    ),
+    [activeIndex, reelHeight]
+  );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <Film size={22} color="#3B82F6" />
-          <Text style={styles.headerTitle}>Videos & Reels</Text>
+      {/* Floating Header */}
+      <View style={[styles.header, { top: insets.top + (Platform.OS === "android" ? 8 : 4) }]}>
+        <View style={styles.headerTitleRow}>
+          <Film size={22} color="#FFFFFF" />
+          <Text style={styles.headerTitle}>Reels</Text>
         </View>
+
+        <TouchableOpacity
+          style={styles.headerIconBtn}
+          activeOpacity={0.8}
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push("/(tabs)/create" as any);
+          }}
+        >
+          <Camera size={22} color="#FFFFFF" />
+        </TouchableOpacity>
       </View>
 
+      {/* Content */}
       {isLoading ? (
-        <View style={styles.loadingContainer}>
+        <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#3B82F6" />
-          <Text style={styles.loadingText}>Loading videos...</Text>
+          <Text style={styles.loadingText}>Loading Reels...</Text>
+        </View>
+      ) : reels.length === 0 ? (
+        <View style={styles.centerContainer}>
+          <Film size={54} color="#64748B" />
+          <Text style={styles.emptyTitle}>No Reels Yet</Text>
+          <Text style={styles.emptySubtitle}>
+            Be the first to share a video reel on Stalk!
+          </Text>
+          <TouchableOpacity
+            style={styles.createBtn}
+            onPress={() => router.push("/(tabs)/create" as any)}
+          >
+            <Camera size={18} color="#FFFFFF" />
+            <Text style={styles.createBtnText}>Create Reel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.refreshBtn}
+            onPress={() => refetch()}
+          >
+            <RefreshCw size={16} color="#64748B" />
+            <Text style={styles.refreshBtnText}>Refresh</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
-          data={videoPosts}
-          keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-          renderItem={({ item }) => {
-            const author = item.user?.fullName || item.userName || "User";
-            const avatar =
-              item.userProfilePicture ||
-              item.user?.profilePicUrl ||
-              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
-
-            return (
-              <TouchableOpacity
-                style={styles.videoCard}
-                activeOpacity={0.9}
-                onPress={() => router.push(`/post/${item.id}` as any)}
-              >
-                {/* Video Thumbnail Box */}
-                <View style={styles.thumbnailBox}>
-                  <Image
-                    source={{
-                      uri:
-                        item.media?.url ||
-                        item.mediaUrl ||
-                        "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800",
-                    }}
-                    style={styles.thumbnail}
-                    contentFit="cover"
-                  />
-                  <View style={styles.playOverlay}>
-                    <View style={styles.playCircle}>
-                      <Play size={24} color="#FFFFFF" fill="#FFFFFF" />
-                    </View>
-                  </View>
-                </View>
-
-                {/* Video Info */}
-                <View style={styles.videoInfo}>
-                  <View style={styles.authorRow}>
-                    <Image source={{ uri: avatar }} style={styles.authorAvatar} contentFit="cover" />
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={styles.authorName}>{author}</Text>
-                      <Text style={styles.description} numberOfLines={2}>
-                        {item.description || "Video Reel"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.videoStats}>
-                    <View style={styles.stat}>
-                      <Heart size={16} color="#64748B" />
-                      <Text style={styles.statText}>{item.likesCount || item.likes.length || 0}</Text>
-                    </View>
-                    <View style={styles.stat}>
-                      <MessageCircle size={16} color="#64748B" />
-                      <Text style={styles.statText}>{item.commentsCount || 0}</Text>
-                    </View>
-                    <View style={styles.stat}>
-                      <Share2 size={16} color="#64748B" />
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Film size={48} color="#94A3B8" />
-              <Text style={styles.emptyTitle}>No videos yet</Text>
-              <Text style={styles.emptySubtitle}>Upload the first video reel to the platform!</Text>
-            </View>
-          }
-          contentContainerStyle={styles.listContent}
+          data={reels}
+          keyExtractor={(item) => item.id || (item as any)._id}
+          renderItem={renderItem}
+          pagingEnabled
+          snapToInterval={reelHeight}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          showsVerticalScrollIndicator={false}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          refreshing={isRefetching}
+          onRefresh={refetch}
+          getItemLayout={(_data, index) => ({
+            length: reelHeight,
+            offset: reelHeight * index,
+            index,
+          })}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#000000",
   },
   header: {
-    height: 56,
-    backgroundColor: "#FFFFFF",
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 20,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    justifyContent: "space-between",
   },
-  titleRow: {
+  headerTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#0F172A",
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
-  loadingContainer: {
+  headerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  centerContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 32,
+    backgroundColor: "#000000",
   },
   loadingText: {
-    marginTop: 10,
-    color: "#64748B",
-  },
-  listContent: {
-    paddingVertical: 12,
-  },
-  videoCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  thumbnailBox: {
-    width: "100%",
-    height: 220,
-    backgroundColor: "#0F172A",
-    position: "relative",
-  },
-  thumbnail: {
-    width: "100%",
-    height: "100%",
-    opacity: 0.85,
-  },
-  playOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  playCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(59, 130, 246, 0.9)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  videoInfo: {
-    padding: 14,
-  },
-  authorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  authorAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#E2E8F0",
-  },
-  authorName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  description: {
-    fontSize: 13,
-    color: "#475569",
-    marginTop: 2,
-    lineHeight: 18,
-  },
-  videoStats: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 16,
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    paddingTop: 10,
-  },
-  stat: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  statText: {
-    fontSize: 13,
-    color: "#64748B",
-    fontWeight: "600",
-  },
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 100,
+    marginTop: 14,
+    color: "#94A3B8",
+    fontSize: 15,
+    fontWeight: "500",
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0F172A",
-    marginTop: 12,
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "800",
+    marginTop: 16,
   },
   emptySubtitle: {
+    color: "#94A3B8",
     fontSize: 14,
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  createBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 24,
+  },
+  createBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  refreshBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 16,
+    padding: 8,
+  },
+  refreshBtnText: {
     color: "#64748B",
-    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "600",
   },
 });
+
