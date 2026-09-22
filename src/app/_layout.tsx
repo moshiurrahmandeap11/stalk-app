@@ -43,6 +43,7 @@ export default function RootLayout() {
           <Stack.Screen name="login" options={{ presentation: "modal" }} />
           <Stack.Screen name="register" options={{ presentation: "modal" }} />
           <Stack.Screen name="messages" />
+          <Stack.Screen name="search" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="chat/[id]" />
           <Stack.Screen name="post/[id]" />

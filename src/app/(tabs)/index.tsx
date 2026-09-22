@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { MessageSquare, Bell, LogIn } from "lucide-react-native";
+import { MessageSquare, Bell, LogIn, Search } from "lucide-react-native";
 import { postService } from "../../services/post.service";
 import { PostCard } from "../../components/post/PostCard";
 import { useAuthStore } from "../../store/auth.store";
@@ -49,6 +49,13 @@ export default function FeedScreen() {
         </View>
 
         <View style={styles.navIcons}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.push("/search" as any)}
+          >
+            <Search size={22} color="#0F172A" />
+          </TouchableOpacity>
+
           {isAuthenticated ? (
             <>
               <TouchableOpacity
