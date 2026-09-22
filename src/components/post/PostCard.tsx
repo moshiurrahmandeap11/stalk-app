@@ -1,106 +1,451 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+} from "react-native";
 import { Image } from "expo-image";
-import { Heart, MessageCircle, Share2, Repeat2 } from "lucide-react-native";
+import * as Haptics from "expo-haptics";
+import * as Clipboard from "expo-clipboard";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withSpring,
+} from "react-native-reanimated";
+import {
+  ArrowUp,
+  ArrowDown,
+  MessageCircle,
+  Share2,
+  MoreHorizontal,
+  Play,
+} from "lucide-react-native";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { IPost } from "../../interfaces/post.interface";
 import { postService } from "../../services/post.service";
+import { followService } from "../../services/follow.service";
 import { useAuthStore } from "../../store/auth.store";
+import { SharedPostPreview } from "./SharedPostPreview";
+import { ShareModal } from "./ShareModal";
 
 interface PostCardProps {
   post: IPost;
   onPressComment?: () => void;
   onPressUser?: (username?: string | null) => void;
+  onPostDeleted?: (postId: string) => void;
 }
 
-export const PostCard: React.FC<PostCardProps> = ({ post, onPressComment, onPressUser }) => {
-  const currentUserId = useAuthStore((s) => s.user?.id);
-  const [isLiked, setIsLiked] = useState(
-    currentUserId ? post.likes.includes(currentUserId) : false
-  );
-  const [likesCount, setLikesCount] = useState(post.likesCount || post.likes.length || 0);
+const getTimeAgo = (dateStr?: string | Date) => {
+  if (!dateStr) return "just now";
+  const seconds = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const intervals: Record<string, number> = {
+    y: 31536000,
+    mo: 2592000,
+    w: 604800,
+    d: 86400,
+    h: 3600,
+    m: 60,
+  };
+  for (const [unit, s] of Object.entries(intervals)) {
+    const n = Math.floor(seconds / s);
+    if (n >= 1) return `${n}${unit} ago`;
+  }
+  return "just now";
+};
 
-  const handleLike = async () => {
-    // Optimistic update
-    const nextState = !isLiked;
-    setIsLiked(nextState);
-    setLikesCount((prev) => (nextState ? prev + 1 : Math.max(0, prev - 1)));
+export const PostCard: React.FC<PostCardProps> = ({
+  post,
+  onPressComment,
+  onPressUser,
+  onPostDeleted,
+}) => {
+  const queryClient = useQueryClient();
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  const postId = post.id || (post as any)._id;
+  const authorId = post.userId || post.user?.id || (post.user as any)?._id;
+  const isOwner = Boolean(currentUserId && authorId && currentUserId === authorId);
+
+  // Likes / Upvotes state
+  const initialLiked = Boolean(
+    (currentUserId && post.likes && post.likes.includes(currentUserId)) ||
+      post.isLikedByCurrentUser
+  );
+  const [isUpvoted, setIsUpvoted] = useState(initialLiked);
+  const [isDownvoted, setIsDownvoted] = useState(false);
+  const [likesCount, setLikesCount] = useState(
+    post.likesCount ?? (post.likes ? post.likes.length : 0)
+  );
+
+  // Modals & Menu
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharesCount, setSharesCount] = useState(post.sharesCount ?? 0);
+
+  // Animations
+  const upvoteScale = useSharedValue(1);
+  const downvoteScale = useSharedValue(1);
+
+  const upvoteAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: upvoteScale.value }],
+  }));
+
+  const downvoteAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: downvoteScale.value }],
+  }));
+
+  // Follow Status Query
+  const { data: isFollowing = false } = useQuery({
+    queryKey: ["follow-status", authorId],
+    queryFn: () => followService.getFollowStatus(authorId),
+    enabled: Boolean(isAuthenticated && authorId && !isOwner),
+    staleTime: 60 * 1000,
+  });
+
+  // Follow Mutation
+  const followMutation = useMutation({
+    mutationFn: async (nextStatus: boolean) => {
+      if (nextStatus) {
+        return followService.followUser(authorId);
+      } else {
+        return followService.unfollowUser(authorId);
+      }
+    },
+    onMutate: async (nextStatus: boolean) => {
+      await queryClient.cancelQueries({ queryKey: ["follow-status", authorId] });
+      const prev = queryClient.getQueryData(["follow-status", authorId]);
+      queryClient.setQueryData(["follow-status", authorId], nextStatus);
+      return { prev };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.prev !== undefined) {
+        queryClient.setQueryData(["follow-status", authorId], context.prev);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["follow-status", authorId] });
+    },
+  });
+
+  const handleToggleFollow = () => {
+    if (!isAuthenticated) {
+      Alert.alert("Sign In Required", "Please sign in to follow users.");
+      return;
+    }
+    if (!authorId || isOwner) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    followMutation.mutate(!isFollowing);
+  };
+
+  // Upvote Handler
+  const handleUpvote = async () => {
+    if (!isAuthenticated) {
+      Alert.alert("Sign In Required", "Please sign in to vote on posts.");
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    upvoteScale.value = withSequence(
+      withSpring(1.35, { damping: 4, stiffness: 300 }),
+      withSpring(1, { damping: 12, stiffness: 200 })
+    );
+
+    const prevUpvoted = isUpvoted;
+    const prevDownvoted = isDownvoted;
+    const prevCount = likesCount;
+
+    if (prevUpvoted) {
+      setIsUpvoted(false);
+      setLikesCount(Math.max(0, prevCount - 1));
+    } else {
+      setIsUpvoted(true);
+      setIsDownvoted(false);
+      setLikesCount(prevDownvoted ? prevCount + 2 : prevCount + 1);
+    }
 
     try {
-      await postService.likePost(post.id);
+      await postService.likePost(postId);
     } catch {
-      // Revert on error
-      setIsLiked(!nextState);
-      setLikesCount((prev) => (!nextState ? prev + 1 : Math.max(0, prev - 1)));
+      setIsUpvoted(prevUpvoted);
+      setIsDownvoted(prevDownvoted);
+      setLikesCount(prevCount);
     }
   };
 
+  // Downvote Handler
+  const handleDownvote = async () => {
+    if (!isAuthenticated) {
+      Alert.alert("Sign In Required", "Please sign in to vote on posts.");
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    downvoteScale.value = withSequence(
+      withSpring(1.35, { damping: 4, stiffness: 300 }),
+      withSpring(1, { damping: 12, stiffness: 200 })
+    );
+
+    const prevUpvoted = isUpvoted;
+    const prevDownvoted = isDownvoted;
+    const prevCount = likesCount;
+
+    if (prevDownvoted) {
+      setIsDownvoted(false);
+    } else {
+      setIsDownvoted(true);
+      if (prevUpvoted) {
+        setIsUpvoted(false);
+        setLikesCount(Math.max(0, prevCount - 1));
+        try {
+          await postService.likePost(postId);
+        } catch {
+          setIsUpvoted(prevUpvoted);
+          setLikesCount(prevCount);
+        }
+      }
+    }
+  };
+
+  const handleOptions = () => {
+    Haptics.selectionAsync();
+    const options: { text: string; onPress?: () => void; style?: "default" | "cancel" | "destructive" }[] = [
+      {
+        text: "Copy Post Link",
+        onPress: async () => {
+          await Clipboard.setStringAsync(`https://stalk.com/post/details/${postId}`);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert("Copied", "Post link copied to clipboard.");
+        },
+      },
+      {
+        text: "Save Post",
+        onPress: async () => {
+          try {
+            await postService.savePost(postId);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert("Saved", "Post saved to your bookmarks.");
+          } catch {}
+        },
+      },
+    ];
+
+    if (isOwner) {
+      options.push({
+        text: "Delete Post",
+        style: "destructive",
+        onPress: () => {
+          Alert.alert("Delete Post", "Are you sure you want to delete this post?", [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Delete",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await postService.deletePost(postId);
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  onPostDeleted?.(postId);
+                } catch {
+                  Alert.alert("Error", "Failed to delete post.");
+                }
+              },
+            },
+          ]);
+        },
+      });
+    }
+
+    options.push({ text: "Cancel", style: "cancel" });
+
+    Alert.alert("Post Options", undefined, options);
+  };
+
+  const authorName = post.userName || post.user?.fullName || "User";
+  const authorHandle = post.username || post.user?.username || (post.user as any)?.name || "user";
   const avatarUri =
     post.userProfilePicture ||
     post.user?.profilePicUrl ||
     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
 
   const mediaUri = post.media?.url || post.mediaUrl;
+  const isVideo =
+    post.mediaType === "video" || post.media?.resourceType === "video";
+
+  const commentCount = post.commentsCount ?? (post.comments ? post.comments.length : 0);
 
   return (
     <View style={styles.card}>
-      {/* Author Header */}
-      <TouchableOpacity
-        style={styles.header}
-        activeOpacity={0.8}
-        onPress={() => onPressUser?.(post.username || post.user?.username)}
-      >
-        <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
-        <View style={styles.headerInfo}>
-          <Text style={styles.authorName}>{post.userName || post.user?.fullName || "User"}</Text>
-          <Text style={styles.username}>
-            @{post.username || post.user?.username || "user"} •{" "}
-            {new Date(post.createdAt).toLocaleDateString()}
-          </Text>
-        </View>
-      </TouchableOpacity>
+      {/* Top Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.authorSection}
+          activeOpacity={0.8}
+          onPress={() => onPressUser?.(authorHandle)}
+        >
+          <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+          <View style={styles.headerInfo}>
+            <View style={styles.authorRow}>
+              <Text style={styles.authorName} numberOfLines={1}>
+                {authorName}
+              </Text>
+              {post.isShare && (
+                <Text style={styles.sharedBadge}>shared a post</Text>
+              )}
+            </View>
+            <Text style={styles.username}>
+              @{authorHandle} • {getTimeAgo(post.createdAt)}
+            </Text>
+          </View>
+        </TouchableOpacity>
 
-      {/* Description */}
+        {/* Right side: Follow Button & More Options */}
+        <View style={styles.headerRight}>
+          {!isOwner && authorId ? (
+            <TouchableOpacity
+              style={[
+                styles.followBtn,
+                isFollowing ? styles.followingBtn : styles.notFollowingBtn,
+              ]}
+              activeOpacity={0.7}
+              onPress={handleToggleFollow}
+            >
+              <Text
+                style={[
+                  styles.followBtnText,
+                  isFollowing ? styles.followingBtnText : styles.notFollowingBtnText,
+                ]}
+              >
+                {isFollowing ? "Following" : "Follow +"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <TouchableOpacity
+            style={styles.optionsBtn}
+            activeOpacity={0.7}
+            onPress={handleOptions}
+          >
+            <MoreHorizontal size={20} color="#64748B" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Post Text Description */}
       {post.description ? (
         <Text style={styles.description}>{post.description}</Text>
       ) : null}
 
-      {/* Media */}
-      {mediaUri ? (
-        <Image
-          source={{ uri: mediaUri }}
-          style={styles.postMedia}
-          contentFit="cover"
-          transition={200}
+      {/* Shared Post Preview (if this post is a shared post) */}
+      {(post.isShare || post.originalPost) && (
+        <SharedPostPreview
+          originalPost={post.originalPost}
+          onPress={onPressComment}
         />
+      )}
+
+      {/* Media Rendering */}
+      {mediaUri && !post.isShare ? (
+        <TouchableOpacity
+          style={styles.mediaContainer}
+          activeOpacity={0.9}
+          onPress={onPressComment}
+        >
+          <Image
+            source={{ uri: mediaUri }}
+            style={styles.postMedia}
+            contentFit="cover"
+            transition={200}
+          />
+          {isVideo && (
+            <View style={styles.videoOverlay}>
+              <View style={styles.playCircle}>
+                <Play size={24} color="#FFFFFF" fill="#FFFFFF" />
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
       ) : null}
 
-      {/* Action Bar */}
+      {/* Action Bar (Reddit/Facebook Hybrid) */}
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
-          <Heart
-            size={20}
-            color={isLiked ? "#EF4444" : "#64748B"}
-            fill={isLiked ? "#EF4444" : "none"}
-          />
-          <Text style={[styles.actionText, isLiked && { color: "#EF4444" }]}>
-            {likesCount}
+        {/* Upvote & Downvote Pill Container */}
+        <View style={styles.votePill}>
+          <TouchableOpacity
+            style={styles.voteBtn}
+            activeOpacity={0.7}
+            onPress={handleUpvote}
+          >
+            <Animated.View style={upvoteAnimStyle}>
+              <ArrowUp
+                size={18}
+                color={isUpvoted ? "#2563EB" : "#64748B"}
+                strokeWidth={isUpvoted ? 2.8 : 2}
+              />
+            </Animated.View>
+            <Text
+              style={[
+                styles.voteCount,
+                isUpvoted && styles.upvotedText,
+                isDownvoted && styles.downvotedText,
+              ]}
+            >
+              {likesCount}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.voteDivider} />
+
+          <TouchableOpacity
+            style={styles.voteBtn}
+            activeOpacity={0.7}
+            onPress={handleDownvote}
+          >
+            <Animated.View style={downvoteAnimStyle}>
+              <ArrowDown
+                size={18}
+                color={isDownvoted ? "#F43F5E" : "#64748B"}
+                strokeWidth={isDownvoted ? 2.8 : 2}
+              />
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Comment Button */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          activeOpacity={0.7}
+          onPress={onPressComment}
+        >
+          <MessageCircle size={18} color="#64748B" strokeWidth={2} />
+          <Text style={styles.actionText}>
+            {commentCount > 0 ? `${commentCount} Comments` : "Comment"}
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionBtn} onPress={onPressComment}>
-          <MessageCircle size={20} color="#64748B" />
-          <Text style={styles.actionText}>{post.commentsCount || post.comments?.length || 0}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionBtn}>
-          <Repeat2 size={20} color="#64748B" />
-          <Text style={styles.actionText}>{post.repostsCount || 0}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionBtn}>
-          <Share2 size={20} color="#64748B" />
+        {/* Share Button */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          activeOpacity={0.7}
+          onPress={() => setShowShareModal(true)}
+        >
+          <Share2 size={18} color="#64748B" strokeWidth={2} />
+          <Text style={styles.actionText}>
+            {sharesCount > 0 ? `${sharesCount} Shares` : "Share"}
+          </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Telegram-style Share Modal Sheet */}
+      <ShareModal
+        visible={showShareModal}
+        post={post}
+        onClose={() => setShowShareModal(false)}
+        onShared={() => setSharesCount((prev) => prev + 1)}
+      />
     </View>
   );
 };
@@ -110,51 +455,124 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     marginHorizontal: 16,
-    marginVertical: 8,
-    padding: 16,
-    shadowColor: "#000",
+    marginVertical: 6,
+    padding: 14,
+    shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  authorSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 8,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: "#E2E8F0",
   },
   headerInfo: {
-    marginLeft: 12,
+    marginLeft: 10,
     flex: 1,
   },
+  authorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
   authorName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
     color: "#0F172A",
   },
-  username: {
-    fontSize: 13,
+  sharedBadge: {
+    fontSize: 11,
     color: "#64748B",
-    marginTop: 2,
+    fontStyle: "italic",
+  },
+  username: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  followBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  notFollowingBtn: {
+    backgroundColor: "#2563EB",
+  },
+  followingBtn: {
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  followBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  notFollowingBtnText: {
+    color: "#FFFFFF",
+  },
+  followingBtnText: {
+    color: "#475569",
+  },
+  optionsBtn: {
+    padding: 6,
+    borderRadius: 16,
   },
   description: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14.5,
+    lineHeight: 21,
     color: "#1E293B",
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  mediaContainer: {
+    width: "100%",
+    height: 250,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#F8FAFC",
+    marginBottom: 10,
+    position: "relative",
   },
   postMedia: {
     width: "100%",
-    height: 260,
-    borderRadius: 12,
-    backgroundColor: "#F1F5F9",
-    marginBottom: 12,
+    height: "100%",
+  },
+  videoOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(0, 0, 0, 0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: 4,
   },
   actions: {
     flexDirection: "row",
@@ -162,17 +580,56 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
-    paddingTop: 12,
+    paddingTop: 10,
+    marginTop: 2,
+  },
+  votePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  voteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    gap: 4,
+  },
+  voteCount: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#475569",
+    minWidth: 16,
+    textAlign: "center",
+  },
+  upvotedText: {
+    color: "#2563EB",
+  },
+  downvotedText: {
+    color: "#F43F5E",
+  },
+  voteDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: "#CBD5E1",
+    marginHorizontal: 4,
   },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 18,
     gap: 6,
   },
   actionText: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: "600",
     color: "#64748B",
   },
 });
 
+export default PostCard;

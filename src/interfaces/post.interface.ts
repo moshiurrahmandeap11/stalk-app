@@ -41,6 +41,8 @@ export interface IPost {
   commentsCount: number;
   reposts: string[];
   repostsCount: number;
+  sharesCount?: number;
+  isLikedByCurrentUser?: boolean;
   isShare?: boolean;
   isRepost?: boolean;
   originalPost?: IPost | null;

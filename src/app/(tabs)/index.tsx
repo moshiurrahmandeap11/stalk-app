@@ -103,6 +103,7 @@ export default function FeedScreen() {
                 if (username) router.push(`/s/${username}` as any);
               }}
               onPressComment={() => router.push(`/post/${item.id}` as any)}
+              onPostDeleted={() => refetch()}
             />
           )}
           contentContainerStyle={styles.listContent}

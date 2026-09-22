@@ -20,12 +20,29 @@ export const postService = {
   },
 
   async addComment(postId: string, text: string, parentId?: string): Promise<any> {
-    const res = await apiClient.post(`/posts/${postId}/comments`, { text, parentId });
+    const res = await apiClient.post(`/posts/${postId}/comment`, { text, parentCommentId: parentId });
+    return res.data.data;
+  },
+
+  async sharePost(postId: string, description?: string): Promise<IPost> {
+    const res = await apiClient.post<{ success: boolean; data: IPost }>(`/posts/${postId}/share`, {
+      description,
+    });
+    return res.data.data;
+  },
+
+  async savePost(postId: string): Promise<any> {
+    const res = await apiClient.post(`/posts/${postId}/save`);
+    return res.data.data;
+  },
+
+  async deletePost(postId: string): Promise<any> {
+    const res = await apiClient.delete(`/posts/${postId}`);
     return res.data.data;
   },
 
   async createPost(formData: FormData): Promise<IPost> {
-    const res = await apiClient.post<{ success: boolean; data: IPost }>("/posts", formData, {
+    const res = await apiClient.post<{ success: boolean; data: IPost }>("/posts/create", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data.data;
