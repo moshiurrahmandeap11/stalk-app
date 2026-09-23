@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useFocusEffect } from "expo-router";
-import { MessageSquare, Bell, LogIn } from "lucide-react-native";
+import { Search, Bell } from "lucide-react-native";
 import { postService } from "../../services/post.service";
 import { PostCard } from "../../components/post/PostCard";
 import { useAuthStore } from "../../store/auth.store";
@@ -24,20 +24,29 @@ import { getMediaUrl } from "../../utils/media";
 
 export default function FeedScreen() {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuthStore();
   const [page, setPage] = useState(1);
   const [visiblePostId, setVisiblePostId] = useState<string | null>(null);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const [cachedPosts, setCachedPosts] = useState<IPost[]>([]);
 
+  // Mandatory authentication redirect
+  useEffect(() => {
+    if (!isAuthLoading && !isAuthenticated) {
+      router.replace("/login" as any);
+    }
+  }, [isAuthLoading, isAuthenticated]);
+
   // Facebook-style instant feed preload from local cache
   useEffect(() => {
-    getFeedCache().then((cached) => {
-      if (cached && cached.length > 0) {
-        setCachedPosts(cached);
-      }
-    });
-  }, []);
+    if (isAuthenticated) {
+      getFeedCache().then((cached) => {
+        if (cached && cached.length > 0) {
+          setCachedPosts(cached);
+        }
+      });
+    }
+  }, [isAuthenticated]);
 
   // Pause feed video playback when switching away from Feed tab
   useFocusEffect(
@@ -89,7 +98,13 @@ export default function FeedScreen() {
       return res;
     },
     placeholderData: (prev) => prev,
+    enabled: isAuthenticated,
   });
+
+  // If unauthenticated, redirecting to login, render nothing
+  if (!isAuthenticated && !isAuthLoading) {
+    return null;
+  }
 
   // Use fresh query data when loaded, or cached posts instantly while fetching
   const posts: IPost[] =
@@ -113,30 +128,18 @@ export default function FeedScreen() {
         </View>
 
         <View style={styles.navIcons}>
-          {isAuthenticated ? (
-            <>
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => router.push("/messages" as any)}
-              >
-                <MessageSquare size={22} color="#0F172A" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => router.push("/notifications" as any)}
-              >
-                <Bell size={22} color="#0F172A" />
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity
-              style={styles.loginBtn}
-              onPress={() => router.push("/login" as any)}
-            >
-              <LogIn size={18} color="#FFFFFF" />
-              <Text style={styles.loginText}>Sign In</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.push("/search" as any)}
+          >
+            <Search size={22} color="#0F172A" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.push("/notifications" as any)}
+          >
+            <Bell size={22} color="#0F172A" />
+          </TouchableOpacity>
         </View>
       </View>
 

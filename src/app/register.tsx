@@ -71,7 +71,7 @@ export default function RegisterScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.container}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.replace("/login" as any)}>
             <ArrowLeft size={24} color="#0F172A" />
           </TouchableOpacity>
 

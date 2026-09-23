@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { DarkTheme, DefaultTheme, ThemeProvider, Stack } from "expo-router";
+import { DarkTheme, DefaultTheme, ThemeProvider, Stack, useRouter, useSegments } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
@@ -22,15 +22,17 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const restoreSession = useAuthStore((s) => s.restoreSession);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
   const connectSocket = useSocketStore((s) => s.connectSocket);
+  const disconnectSocket = useSocketStore((s) => s.disconnectSocket);
+  const router = useRouter();
+  const segments = useSegments();
 
   useEffect(() => {
     restoreSession().finally(() => {
       SplashScreen.hideAsync();
     });
   }, []);
-
-  const disconnectSocket = useSocketStore((s) => s.disconnectSocket);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -40,13 +42,26 @@ export default function RootLayout() {
     }
   }, [isAuthenticated]);
 
+  // Global Auth Guard: Mandatory login
+  useEffect(() => {
+    if (isLoading) return;
+
+    const inAuthGroup = segments[0] === "login" || segments[0] === "register";
+
+    if (!isAuthenticated && !inAuthGroup) {
+      router.replace("/login" as any);
+    } else if (isAuthenticated && inAuthGroup) {
+      router.replace("/(tabs)" as any);
+    }
+  }, [isAuthenticated, isLoading, segments]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="login" options={{ presentation: "modal" }} />
-          <Stack.Screen name="register" options={{ presentation: "modal" }} />
+          <Stack.Screen name="login" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="register" options={{ gestureEnabled: false }} />
           <Stack.Screen name="messages" />
           <Stack.Screen name="search" />
           <Stack.Screen name="notifications" />

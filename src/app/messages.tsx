@@ -21,7 +21,7 @@ import { useSocketStore } from "../store/socket.store";
 import { playReceiveSound } from "../utils/chatSounds";
 import { CreateGroupModal } from "../components/chat/CreateGroupModal";
 
-export default function MessagesScreen() {
+export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = {}) {
   const router = useRouter();
   const currentUserId = useAuthStore((s) => s.user?.id);
   const { socket } = useSocketStore();
@@ -109,9 +109,13 @@ export default function MessagesScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <ArrowLeft size={22} color="#0F172A" />
-        </TouchableOpacity>
+        {!isTab ? (
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <ArrowLeft size={22} color="#0F172A" />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 12 }} />
+        )}
         <Text style={styles.headerTitle}>Chats</Text>
         <TouchableOpacity
           style={styles.newGroupBtn}

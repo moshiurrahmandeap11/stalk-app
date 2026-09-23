@@ -21,6 +21,7 @@ import { useSocketStore } from "../store/socket.store";
 export default function LoginScreen() {
   const router = useRouter();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const connectSocket = useSocketStore((s) => s.connectSocket);
 
   const [email, setEmail] = useState("");
@@ -66,11 +67,13 @@ export default function LoginScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.container}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <ArrowLeft size={24} color="#0F172A" />
-          </TouchableOpacity>
+          {isAuthenticated && (
+            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+              <ArrowLeft size={24} color="#0F172A" />
+            </TouchableOpacity>
+          )}
 
-          <View style={styles.header}>
+          <View style={[styles.header, !isAuthenticated && { marginTop: 24 }]}>
             <Text style={styles.title}>Welcome Back 👋</Text>
             <Text style={styles.subtitle}>Sign in to continue exploring Stalk / BDBook</Text>
           </View>
