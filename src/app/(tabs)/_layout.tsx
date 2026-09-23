@@ -4,17 +4,19 @@ import { Tabs, useRouter, usePathname } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { AnimatedTabBar } from "../../components/navigation/AnimatedTabBar";
 
-const TAB_ROUTES = ["index", "videos", "create", "messages", "profile"];
+const SLIDE_TABS = ["index", "videos", "create", "messages"];
+const ALL_TABS = ["index", "videos", "create", "messages", "profile"];
 
 export default function TabLayout() {
   const router = useRouter();
   const pathname = usePathname();
+  const hasTriggeredRef = useRef(false);
 
   const getCurrentTab = () => {
     if (pathname === "/" || pathname === "" || pathname === "/(tabs)") {
       return "index";
     }
-    for (const tab of TAB_ROUTES) {
+    for (const tab of ALL_TABS) {
       if (pathname.includes(tab)) {
         return tab;
       }
@@ -24,30 +26,50 @@ export default function TabLayout() {
 
   const panResponder = useRef(
     PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only trigger on clear horizontal swipes without interfering with vertical feeds
+        // Instantly capture clear horizontal swipes without interfering with vertical feeds
         return (
-          Math.abs(gestureState.dx) > 35 &&
-          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2.8
+          Math.abs(gestureState.dx) > 20 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2.2
         );
       },
-      onPanResponderRelease: (_, gestureState) => {
-        const currentTab = getCurrentTab();
-        const currentIndex = TAB_ROUTES.indexOf(currentTab);
-        if (currentIndex === -1) return;
+      onPanResponderGrant: () => {
+        hasTriggeredRef.current = false;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (hasTriggeredRef.current) return;
 
-        // Swiped Left (Drag Right-to-Left) -> Next Tab
-        if (gestureState.dx < -60 && currentIndex < TAB_ROUTES.length - 1) {
-          Haptics.selectionAsync().catch(() => {});
-          const nextTab = TAB_ROUTES[currentIndex + 1];
-          router.navigate(nextTab === "index" ? "/(tabs)" : (`/(tabs)/${nextTab}` as any));
+        // Instant slide trigger without waiting for touch release
+        if (
+          Math.abs(gestureState.dx) > 26 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2.2
+        ) {
+          const currentTab = getCurrentTab();
+          const currentIndex = SLIDE_TABS.indexOf(currentTab);
+          if (currentIndex === -1) return;
+
+          // Drag Right-to-Left (dx < -26) -> Next Tab
+          if (gestureState.dx < -26 && currentIndex < SLIDE_TABS.length - 1) {
+            hasTriggeredRef.current = true;
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            const nextTab = SLIDE_TABS[currentIndex + 1];
+            router.navigate(nextTab === "index" ? "/(tabs)" : (`/(tabs)/${nextTab}` as any));
+          }
+          // Drag Left-to-Right (dx > 26) -> Previous Tab
+          else if (gestureState.dx > 26 && currentIndex > 0) {
+            hasTriggeredRef.current = true;
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            const prevTab = SLIDE_TABS[currentIndex - 1];
+            router.navigate(prevTab === "index" ? "/(tabs)" : (`/(tabs)/${prevTab}` as any));
+          }
         }
-        // Swiped Right (Drag Left-to-Right) -> Previous Tab
-        else if (gestureState.dx > 60 && currentIndex > 0) {
-          Haptics.selectionAsync().catch(() => {});
-          const prevTab = TAB_ROUTES[currentIndex - 1];
-          router.navigate(prevTab === "index" ? "/(tabs)" : (`/(tabs)/${prevTab}` as any));
-        }
+      },
+      onPanResponderRelease: () => {
+        hasTriggeredRef.current = false;
+      },
+      onPanResponderTerminate: () => {
+        hasTriggeredRef.current = false;
       },
     })
   ).current;

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -10,11 +10,13 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import {
   Home,
-  Film,
-  SquarePlus,
   MessageCircle,
   User,
+  LogOut,
 } from "lucide-react-native";
+import { InstagramReelsIcon, InstagramPostIcon } from "./InstagramIcons";
+import { FacebookMenuDrawer } from "./FacebookMenuDrawer";
+import { FacebookActionSheet } from "../ui/FacebookActionSheet";
 import { useAuthStore } from "../../store/auth.store";
 import { getMediaUrl } from "../../utils/media";
 
@@ -47,13 +49,13 @@ const TabItem: React.FC<TabItemProps> = ({
   }));
 
   const handlePress = () => {
-    Haptics.selectionAsync().catch(() => {});
-    scale.value = withSpring(0.85, { damping: 10, stiffness: 300 }, () => {
-      scale.value = withSpring(1.08, { damping: 12, stiffness: 200 }, () => {
-        scale.value = withSpring(1);
-      });
-    });
+    // Instant execution with zero latency
     onPress();
+    Haptics.selectionAsync().catch(() => {});
+    // Parallel micro-bounce animation
+    scale.value = withSpring(0.88, { damping: 14, stiffness: 350 }, () => {
+      scale.value = withSpring(1);
+    });
   };
 
   const color = isDarkTab
@@ -65,16 +67,30 @@ const TabItem: React.FC<TabItemProps> = ({
     : "#64748B";
 
   const size = 26;
-  const strokeWidth = isFocused ? 2.5 : 1.8;
+  const strokeWidth = isFocused ? 2.5 : 1.9;
 
   const renderIcon = () => {
     switch (name) {
       case "index":
         return <Home size={size} color={color} strokeWidth={strokeWidth} />;
       case "videos":
-        return <Film size={size} color={color} strokeWidth={strokeWidth} />;
+        return (
+          <InstagramReelsIcon
+            size={size}
+            color={color}
+            strokeWidth={strokeWidth}
+            isFocused={isFocused}
+          />
+        );
       case "create":
-        return <SquarePlus size={size} color={color} strokeWidth={strokeWidth} />;
+        return (
+          <InstagramPostIcon
+            size={size}
+            color={color}
+            strokeWidth={strokeWidth}
+            isFocused={isFocused}
+          />
+        );
       case "messages":
         return <MessageCircle size={size} color={color} strokeWidth={strokeWidth} />;
       case "profile": {
@@ -106,6 +122,7 @@ const TabItem: React.FC<TabItemProps> = ({
   return (
     <TouchableOpacity
       activeOpacity={0.7}
+      delayPressIn={0}
       onPress={handlePress}
       onLongPress={onLongPress}
       style={styles.tabItem}
@@ -123,57 +140,97 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarProps> = ({
   navigation,
 }) => {
   const insets = useSafeAreaInsets();
+  const logout = useAuthStore((s) => s.logout);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [logoutSheetVisible, setLogoutSheetVisible] = useState(false);
+
   const currentRoute = state.routes[state.index]?.name;
   const isDarkTab = currentRoute === "videos";
 
   return (
-    <View
-      style={[
-        styles.container,
-        isDarkTab && styles.darkContainer,
-        { paddingBottom: Math.max(insets.bottom, 8) },
-      ]}
-    >
-      {state.routes.map((route: any, index: number) => {
-        const isFocused = state.index === index;
-        const { options } = descriptors[route.key];
+    <>
+      <View
+        style={[
+          styles.container,
+          isDarkTab && styles.darkContainer,
+          { paddingBottom: Math.max(insets.bottom, 8) },
+        ]}
+      >
+        {state.routes.map((route: any, index: number) => {
+          const isFocused = state.index === index;
+          const { options } = descriptors[route.key];
 
-        // Skip hidden routes if any
-        if (options.tabBarItemStyle?.display === "none" || options.href === null) {
-          return null;
-        }
-
-        const onPress = () => {
-          const event = navigation.emit({
-            type: "tabPress",
-            target: route.key,
-            canPreventDefault: true,
-          });
-
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
+          // Skip hidden routes if any
+          if (options.tabBarItemStyle?.display === "none" || options.href === null) {
+            return null;
           }
-        };
 
-        const onLongPress = () => {
-          navigation.emit({
-            type: "tabLongPress",
-            target: route.key,
-          });
-        };
+          const onPress = () => {
+            // Profile tab opens the Facebook sidebar drawer
+            if (route.name === "profile") {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setDrawerVisible(true);
+              return;
+            }
 
-        return (
-          <TabItem
-            key={route.key}
-            name={route.name}
-            isFocused={isFocused}
-            isDarkTab={isDarkTab}
-            onPress={onPress}
-            onLongPress={onLongPress}
-          />
-        );
-      })}
-    </View>
+            const event = navigation.emit({
+              type: "tabPress",
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          const onLongPress = () => {
+            navigation.emit({
+              type: "tabLongPress",
+              target: route.key,
+            });
+          };
+
+          return (
+            <TabItem
+              key={route.key}
+              name={route.name}
+              isFocused={isFocused}
+              isDarkTab={isDarkTab}
+              onPress={onPress}
+              onLongPress={onLongPress}
+            />
+          );
+        })}
+      </View>
+
+      {/* Facebook Menu Sidebar Drawer */}
+      <FacebookMenuDrawer
+        visible={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        onLogoutPress={() => setLogoutSheetVisible(true)}
+      />
+
+      {/* Facebook-style Logout Confirmation Action Sheet */}
+      <FacebookActionSheet
+        visible={logoutSheetVisible}
+        title="Log Out of Stalk?"
+        subtitle="You can always log back in at any time."
+        actions={[
+          {
+            id: "logout",
+            label: "Log Out",
+            icon: LogOut,
+            destructive: true,
+            onPress: () => {
+              logout();
+            },
+          },
+        ]}
+        onClose={() => setLogoutSheetVisible(false)}
+        cancelLabel="Stay Logged In"
+      />
+    </>
   );
 };
 

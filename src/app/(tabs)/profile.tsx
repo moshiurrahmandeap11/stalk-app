@@ -10,24 +10,18 @@ import {
   RefreshControl,
   ActivityIndicator,
   Dimensions,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  cancelAnimation,
-} from "react-native-reanimated";
+import * as ImagePicker from "expo-image-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LogOut,
   LogIn,
   UserPlus,
-  RefreshCw,
   Edit3,
   Share2,
   MapPin,
@@ -41,13 +35,18 @@ import {
   Info,
   Play,
   Check,
+  Camera,
+  Eye,
+  X,
 } from "lucide-react-native";
 import { useAuthStore } from "../../store/auth.store";
 import { postService } from "../../services/post.service";
 import { followService } from "../../services/follow.service";
+import { userService } from "../../services/user.service";
 import { PostCard } from "../../components/post/PostCard";
 import { EditProfileModal } from "../../components/profile/EditProfileModal";
 import { FollowersModal } from "../../components/profile/FollowersModal";
+import { FacebookActionSheet } from "../../components/ui/FacebookActionSheet";
 import { getMediaUrl } from "../../utils/media";
 import { IPost } from "../../interfaces/post.interface";
 
@@ -57,7 +56,7 @@ const GRID_ITEM_SIZE = (SCREEN_WIDTH - 36) / 3;
 export default function ProfileTabScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, isAuthenticated, logout, refreshUser } = useAuthStore();
+  const { user, isAuthenticated, logout, refreshUser, updateUser } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<"posts" | "media" | "about">("posts");
   const [showEditModal, setShowEditModal] = useState(false);
@@ -65,13 +64,14 @@ export default function ProfileTabScreen() {
   const [followersModalTab, setFollowersModalTab] = useState<"followers" | "following">("followers");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const userId = user?.id || (user as any)?._id;
+  // Facebook-style sheets and full-screen viewer
+  const [showLogoutSheet, setShowLogoutSheet] = useState(false);
+  const [showAvatarSheet, setShowAvatarSheet] = useState(false);
+  const [showCoverSheet, setShowCoverSheet] = useState(false);
+  const [fullScreenImageUri, setFullScreenImageUri] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
-  // Spin animation for refresh button
-  const spinValue = useSharedValue(0);
-  const spinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${spinValue.value * 360}deg` }],
-  }));
+  const userId = user?.id || (user as any)?._id;
 
   // Fetch User Posts
   const {
@@ -105,7 +105,6 @@ export default function ProfileTabScreen() {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    spinValue.value = withRepeat(withTiming(1, { duration: 700 }), -1);
     try {
       await Promise.all([
         refreshUser(),
@@ -119,20 +118,102 @@ export default function ProfileTabScreen() {
       // quiet fail
     } finally {
       setIsRefreshing(false);
-      cancelAnimation(spinValue);
-      spinValue.value = 0;
     }
-  }, [refreshUser, refetchPosts, refetchFollowers, refetchFollowing, queryClient, userId, spinValue]);
+  }, [refreshUser, refetchPosts, refetchFollowers, refetchFollowing, queryClient, userId]);
+
+  const handlePickNewAvatar = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission Required", "Please allow photo access to change your avatar.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets[0]?.uri) {
+        Haptics.selectionAsync();
+        setIsUploadingPhoto(true);
+
+        const asset = result.assets[0];
+        const formData = new FormData();
+        const filename = asset.uri.split("/").pop() || "avatar.jpg";
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+        formData.append("file", {
+          uri: asset.uri,
+          name: filename,
+          type,
+        } as any);
+
+        const res = await userService.uploadProfilePic(formData);
+        if (res && res.profilePicUrl && user) {
+          await updateUser({ ...user, profilePicUrl: res.profilePicUrl });
+          await refreshUser();
+          queryClient.invalidateQueries({ queryKey: ["userPosts", userId] });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      }
+    } catch (e: any) {
+      console.error("Avatar upload failed:", e);
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handlePickNewCover = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission Required", "Please allow photo access to change your cover photo.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets[0]?.uri) {
+        Haptics.selectionAsync();
+        setIsUploadingPhoto(true);
+
+        const asset = result.assets[0];
+        const formData = new FormData();
+        const filename = asset.uri.split("/").pop() || "cover.jpg";
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+        formData.append("file", {
+          uri: asset.uri,
+          name: filename,
+          type,
+        } as any);
+
+        const res = await userService.uploadCoverPhoto(formData);
+        if (res && res.coverPhotoUrl && user) {
+          await updateUser({ ...user, coverPhotoUrl: res.coverPhotoUrl });
+          await refreshUser();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      }
+    } catch (e: any) {
+      console.error("Cover upload failed:", e);
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
 
   const handleLogout = () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out of Stalk?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: () => logout(),
-      },
-    ]);
+    setShowLogoutSheet(true);
   };
 
   const openFollowers = (tab: "followers" | "following") => {
@@ -201,23 +282,17 @@ export default function ProfileTabScreen() {
       >
         {/* Cover Photo */}
         <View style={styles.coverWrapper}>
-          <Image source={{ uri: coverUri }} style={styles.coverPhoto} contentFit="cover" />
-          <SafeAreaView style={styles.coverOverlay} edges={["top"]}>
-            <View style={styles.coverTopBar}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={0.9}
+            onPress={() => setShowCoverSheet(true)}
+          >
+            <Image source={{ uri: coverUri }} style={styles.coverPhoto} contentFit="cover" />
+          </TouchableOpacity>
+          <SafeAreaView style={styles.coverOverlay} edges={["top"]} pointerEvents="box-none">
+            <View style={styles.coverTopBar} pointerEvents="box-none">
               <Text style={styles.coverBrandTitle}>My Profile</Text>
-              <View style={styles.coverActions}>
-                {/* Refresh Button */}
-                <TouchableOpacity
-                  style={styles.coverIconBtn}
-                  onPress={handleRefresh}
-                  disabled={isRefreshing}
-                  activeOpacity={0.8}
-                >
-                  <Animated.View style={spinStyle}>
-                    <RefreshCw size={18} color="#FFFFFF" />
-                  </Animated.View>
-                </TouchableOpacity>
-
+              <View style={styles.coverActions} pointerEvents="auto">
                 {/* Logout Button */}
                 <TouchableOpacity
                   style={[styles.coverIconBtn, styles.logoutBtn]}
@@ -229,6 +304,15 @@ export default function ProfileTabScreen() {
               </View>
             </View>
           </SafeAreaView>
+
+          {/* Facebook-style Cover Camera Badge */}
+          <TouchableOpacity
+            style={styles.coverCameraBadge}
+            activeOpacity={0.8}
+            onPress={() => setShowCoverSheet(true)}
+          >
+            <Camera size={16} color="#0F172A" />
+          </TouchableOpacity>
         </View>
 
         {/* Profile Info Card */}
@@ -236,12 +320,25 @@ export default function ProfileTabScreen() {
           {/* Avatar and Action Buttons Row */}
           <View style={styles.avatarActionRow}>
             <View style={styles.avatarWrapper}>
-              <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setShowAvatarSheet(true)}
+              >
+                <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+              </TouchableOpacity>
               {user.isVerified && (
                 <View style={styles.verifiedBadge}>
                   <Check size={12} color="#FFFFFF" strokeWidth={3} />
                 </View>
               )}
+              {/* Facebook-style Avatar Camera Badge */}
+              <TouchableOpacity
+                style={styles.avatarCameraBadge}
+                activeOpacity={0.8}
+                onPress={() => setShowAvatarSheet(true)}
+              >
+                <Camera size={13} color="#0F172A" />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.profileBtnRow}>
@@ -608,6 +705,106 @@ export default function ProfileTabScreen() {
           onClose={() => setShowFollowersModal(false)}
         />
       )}
+
+      {/* Facebook-style Avatar Action Sheet */}
+      <FacebookActionSheet
+        visible={showAvatarSheet}
+        title="Profile Picture"
+        actions={[
+          {
+            id: "view-avatar",
+            label: "See Profile Picture",
+            subLabel: "View your photo in full screen",
+            icon: Eye,
+            onPress: () => {
+              setFullScreenImageUri(avatarUri);
+            },
+          },
+          {
+            id: "change-avatar",
+            label: "Choose New Profile Picture",
+            subLabel: "Select a photo from your gallery",
+            icon: Camera,
+            onPress: handlePickNewAvatar,
+          },
+        ]}
+        onClose={() => setShowAvatarSheet(false)}
+      />
+
+      {/* Facebook-style Cover Photo Action Sheet */}
+      <FacebookActionSheet
+        visible={showCoverSheet}
+        title="Cover Photo"
+        actions={[
+          {
+            id: "view-cover",
+            label: "View Cover Photo",
+            subLabel: "View your cover in full screen",
+            icon: Eye,
+            onPress: () => {
+              setFullScreenImageUri(coverUri);
+            },
+          },
+          {
+            id: "change-cover",
+            label: "Upload Cover Photo",
+            subLabel: "Select a banner from your gallery",
+            icon: Camera,
+            onPress: handlePickNewCover,
+          },
+        ]}
+        onClose={() => setShowCoverSheet(false)}
+      />
+
+      {/* Facebook-style Logout Action Sheet */}
+      <FacebookActionSheet
+        visible={showLogoutSheet}
+        title="Sign Out of Stalk?"
+        subtitle="You can sign back in with your credentials at any time."
+        actions={[
+          {
+            id: "confirm-logout",
+            label: "Sign Out",
+            icon: LogOut,
+            destructive: true,
+            onPress: () => {
+              logout();
+            },
+          },
+        ]}
+        onClose={() => setShowLogoutSheet(false)}
+        cancelLabel="Stay Signed In"
+      />
+
+      {/* Full-screen Image Viewer Modal */}
+      <Modal
+        visible={Boolean(fullScreenImageUri)}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setFullScreenImageUri(null)}
+      >
+        <View style={styles.fullScreenOverlay}>
+          <SafeAreaView style={styles.fullScreenHeader} edges={["top"]}>
+            <TouchableOpacity
+              style={styles.fullScreenCloseBtn}
+              onPress={() => setFullScreenImageUri(null)}
+              activeOpacity={0.7}
+            >
+              <X size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </SafeAreaView>
+          <View style={styles.fullScreenContent}>
+            {fullScreenImageUri && (
+              <Image
+                source={{ uri: fullScreenImageUri }}
+                style={styles.fullScreenImg}
+                contentFit="contain"
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -625,6 +822,68 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: "#CBD5E1",
     position: "relative",
+  },
+  coverCameraBadge: {
+    position: "absolute",
+    bottom: 12,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    borderWidth: 1.5,
+    borderColor: "#F1F5F9",
+  },
+  avatarCameraBadge: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  fullScreenOverlay: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  fullScreenHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    zIndex: 10,
+  },
+  fullScreenCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fullScreenContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fullScreenImg: {
+    width: "100%",
+    height: "100%",
   },
   coverPhoto: {
     width: "100%",

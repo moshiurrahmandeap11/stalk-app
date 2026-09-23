@@ -23,7 +23,12 @@ import {
   MessageCircle,
   Share2,
   MoreHorizontal,
+  Copy,
+  Trash2,
+  Bookmark,
+  EyeOff,
 } from "lucide-react-native";
+import { FacebookActionSheet } from "../ui/FacebookActionSheet";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { IPost } from "../../interfaces/post.interface";
 import { postService } from "../../services/post.service";
@@ -105,6 +110,10 @@ export const PostCard: React.FC<PostCardProps> = ({
   // Media Viewers (Facebook Style)
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [showReelModal, setShowReelModal] = useState(false);
+
+  // Facebook-style Options & Delete Sheet
+  const [showOptionsSheet, setShowOptionsSheet] = useState(false);
+  const [showDeleteSheet, setShowDeleteSheet] = useState(false);
 
   // Sync props when post updates
   useEffect(() => {
@@ -326,45 +335,7 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   const handleOptions = () => {
     Haptics.selectionAsync();
-    const options: { text: string; onPress?: () => void; style?: "default" | "cancel" | "destructive" }[] = [
-      {
-        text: "Copy Post Link",
-        onPress: async () => {
-          await Clipboard.setStringAsync(`https://stalk.com/post/details/${postId}`);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert("Link Copied", "Post link copied to clipboard!");
-        },
-      },
-    ];
-
-    if (isOwner) {
-      options.push({
-        text: "Delete Post",
-        style: "destructive",
-        onPress: () => {
-          Alert.alert("Delete Post", "Are you sure you want to permanently delete this post?", [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Delete",
-              style: "destructive",
-              onPress: async () => {
-                try {
-                  await postService.deletePost(postId);
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  onPostDeleted?.(postId);
-                  queryClient.invalidateQueries({ queryKey: ["posts"] });
-                } catch {
-                  Alert.alert("Error", "Could not delete post.");
-                }
-              },
-            },
-          ]);
-        },
-      });
-    }
-
-    options.push({ text: "Cancel", style: "cancel" });
-    Alert.alert("Post Options", undefined, options);
+    setShowOptionsSheet(true);
   };
 
   const rawMediaUri = post.media?.url || post.mediaUrl || "";
@@ -607,6 +578,85 @@ export const PostCard: React.FC<PostCardProps> = ({
           onClose={() => setShowReelModal(false)}
         />
       )}
+
+      {/* Facebook-style Post Options Action Sheet */}
+      <FacebookActionSheet
+        visible={showOptionsSheet}
+        title="Post Options"
+        actions={[
+          {
+            id: "copy",
+            label: "Copy Link",
+            subLabel: "Copy link to clipboard",
+            icon: Copy,
+            onPress: async () => {
+              await Clipboard.setStringAsync(`https://stalk.com/post/details/${postId}`);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            },
+          },
+          ...(isOwner
+            ? [
+                {
+                  id: "delete",
+                  label: "Delete Post",
+                  subLabel: "Move this post to trash",
+                  icon: Trash2,
+                  destructive: true,
+                  onPress: () => {
+                    setShowDeleteSheet(true);
+                  },
+                },
+              ]
+            : [
+                {
+                  id: "bookmark",
+                  label: "Save Post",
+                  subLabel: "Add this to your saved items",
+                  icon: Bookmark,
+                  onPress: () => {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  },
+                },
+                {
+                  id: "hide",
+                  label: "Hide Post",
+                  subLabel: "See fewer posts like this",
+                  icon: EyeOff,
+                  onPress: () => {
+                    Haptics.selectionAsync();
+                  },
+                },
+              ]),
+        ]}
+        onClose={() => setShowOptionsSheet(false)}
+      />
+
+      {/* Facebook-style Delete Confirmation Action Sheet */}
+      <FacebookActionSheet
+        visible={showDeleteSheet}
+        title="Delete Post?"
+        subtitle="Are you sure you want to permanently delete this post? This action cannot be undone."
+        actions={[
+          {
+            id: "confirm-delete",
+            label: "Delete",
+            icon: Trash2,
+            destructive: true,
+            onPress: async () => {
+              try {
+                await postService.deletePost(postId);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                onPostDeleted?.(postId);
+                queryClient.invalidateQueries({ queryKey: ["posts"] });
+              } catch {
+                // quiet fail or handled
+              }
+            },
+          },
+        ]}
+        onClose={() => setShowDeleteSheet(false)}
+        cancelLabel="Keep Post"
+      />
     </View>
   );
 };
