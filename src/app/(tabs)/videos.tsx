@@ -55,16 +55,13 @@ export default function VideosTabScreen() {
       const res = await postService.getFeedPosts(1, 40);
       const allPosts = res.data || [];
 
-      // Prioritize video posts, but if few or none, also include media posts so feed is active
-      const videos = allPosts.filter(
+      // Strictly filter only genuine video posts for Reels
+      return allPosts.filter(
         (p) =>
           p.mediaType === "video" ||
           p.media?.resourceType === "video" ||
           /\.(mp4|mov|webm|m4v)$/i.test(p.media?.url || p.mediaUrl || "")
       );
-
-      if (videos.length > 0) return videos;
-      return allPosts.filter((p) => p.media?.url || p.mediaUrl);
     },
   });
 

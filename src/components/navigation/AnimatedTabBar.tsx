@@ -7,7 +7,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { Home, Film, Plus, User, Compass } from "lucide-react-native";
+import { Home, Film, Plus, User, Compass, Search } from "lucide-react-native";
 
 export interface AnimatedTabBarProps {
   state: any;
@@ -58,6 +58,8 @@ const TabItem: React.FC<TabItemProps> = ({
     switch (name) {
       case "index":
         return <Home size={size} color={color} strokeWidth={isFocused ? 2.5 : 2} />;
+      case "search":
+        return <Search size={size} color={color} strokeWidth={isFocused ? 2.5 : 2} />;
       case "videos":
         return <Film size={size} color={color} strokeWidth={isFocused ? 2.5 : 2} />;
       case "explore":
@@ -73,8 +75,10 @@ const TabItem: React.FC<TabItemProps> = ({
     switch (name) {
       case "index":
         return "Feed";
+      case "search":
+        return "Search";
       case "videos":
-        return "Videos";
+        return "Reels";
       case "explore":
         return "Explore";
       case "profile":
