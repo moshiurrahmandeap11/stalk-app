@@ -41,12 +41,23 @@
 
 ---
 
-### 2. Push Notifications (FCM / Expo Notifications)
-- **Status:** 🟡 Planned
+### 2. Standalone Android APK Build & Startup Crash Resolution
+- **Status:** ✅ **COMPLETED & DEPLOYED (Build #2 Success)**
+- **Issues Resolved:**
+  - Removed unconfigured `expo-notifications` (missing `google-services.json` caused fatal `Default FirebaseApp is not initialized` crash on startup).
+  - Made `react-native-webrtc` native module lazy-loaded to prevent native binding stalls during boot.
+  - Fortified `SplashScreen` with promise rejection catchers and safety timeout fallback.
+  - Added explicit environment variables into `eas.json` for reliable build-time inlining.
+- **Latest APK Download:** [Download stalk-app.apk](https://expo.dev/artifacts/eas/RmLogvYUPP8XojeKtzsxrOW-Nx5LJb3GWFtBia-yfcc.apk)
+
+---
+
+### 3. Push Notifications (FCM / Expo Notifications)
+- **Status:** 🟡 Planned (Requires Firebase project registration & google-services.json)
 - Integration of remote push notifications for incoming messages and calls when app is in the background or killed.
 
 ---
 
-### 3. Story / Status Uploads
+### 4. Story / Status Uploads
 - **Status:** ⚪ Backlog
 - 24-hour disappearing photo & video stories feed at the top of the home screen.
