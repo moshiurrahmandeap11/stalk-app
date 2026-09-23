@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -8,8 +8,17 @@ import {
   TouchableWithoutFeedback,
   ScrollView,
   Dimensions,
+  PanResponder,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+  Easing,
+} from "react-native-reanimated";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -37,7 +46,7 @@ interface FacebookMenuDrawerProps {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.85, 360);
+const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.82, 350);
 
 export const FacebookMenuDrawer: React.FC<FacebookMenuDrawerProps> = ({
   visible,
@@ -48,7 +57,78 @@ export const FacebookMenuDrawer: React.FC<FacebookMenuDrawerProps> = ({
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
 
-  if (!visible) return null;
+  const [modalRendered, setModalRendered] = useState(visible);
+  const translateX = useSharedValue(DRAWER_WIDTH);
+  const backdropOpacity = useSharedValue(0);
+
+  const handleClosed = () => {
+    setModalRendered(false);
+    onClose();
+  };
+
+  const closeDrawer = () => {
+    translateX.value = withTiming(
+      DRAWER_WIDTH,
+      { duration: 220, easing: Easing.out(Easing.cubic) },
+      (finished) => {
+        if (finished) {
+          runOnJS(handleClosed)();
+        }
+      }
+    );
+    backdropOpacity.value = withTiming(0, { duration: 200 });
+  };
+
+  useEffect(() => {
+    if (visible) {
+      setModalRendered(true);
+      // Fluid slide-in from right edge with Facebook-like spring
+      translateX.value = DRAWER_WIDTH;
+      translateX.value = withSpring(0, {
+        damping: 24,
+        stiffness: 220,
+        mass: 0.85,
+      });
+      backdropOpacity.value = withTiming(1, { duration: 240 });
+    } else if (modalRendered) {
+      closeDrawer();
+    }
+  }, [visible]);
+
+  // Swipe right to dismiss gesture
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return (
+          gestureState.dx > 12 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5
+        );
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx > 0) {
+          translateX.value = gestureState.dx;
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx > 80 || gestureState.vx > 0.45) {
+          closeDrawer();
+        } else {
+          translateX.value = withSpring(0, { damping: 22, stiffness: 240 });
+        }
+      },
+    })
+  ).current;
+
+  const drawerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }));
+
+  if (!modalRendered) return null;
 
   const avatarUri = getMediaUrl(
     user?.profilePicUrl ||
@@ -58,32 +138,40 @@ export const FacebookMenuDrawer: React.FC<FacebookMenuDrawerProps> = ({
 
   const navigateTo = (path: string) => {
     Haptics.selectionAsync();
-    onClose();
+    closeDrawer();
     setTimeout(() => {
       router.push(path as any);
-    }, 150);
+    }, 180);
   };
 
   return (
     <Modal
-      visible={visible}
+      visible={modalRendered}
       transparent
-      animationType="fade"
+      animationType="none"
       statusBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={closeDrawer}
     >
       <View style={styles.modalOverlay}>
-        {/* Backdrop */}
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={styles.backdrop} />
-        </TouchableWithoutFeedback>
+        {/* Animated Dark Backdrop */}
+        <Animated.View style={[styles.backdrop, backdropAnimatedStyle]}>
+          <TouchableWithoutFeedback onPress={closeDrawer}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+        </Animated.View>
 
-        {/* Drawer Container (Slides from Right) */}
-        <View
+        {/* Fluid Animated Drawer (Sliding from Right) */}
+        <Animated.View
           style={[
             styles.drawer,
-            { width: DRAWER_WIDTH, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 16) },
+            {
+              width: DRAWER_WIDTH,
+              paddingTop: insets.top,
+              paddingBottom: Math.max(insets.bottom, 16),
+            },
+            drawerAnimatedStyle,
           ]}
+          {...panResponder.panHandlers}
         >
           {/* Top Header */}
           <View style={styles.header}>
@@ -98,7 +186,7 @@ export const FacebookMenuDrawer: React.FC<FacebookMenuDrawerProps> = ({
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.headerIconBtn}
-                onPress={onClose}
+                onPress={closeDrawer}
                 activeOpacity={0.7}
               >
                 <X size={20} color="#0F172A" />
@@ -236,10 +324,10 @@ export const FacebookMenuDrawer: React.FC<FacebookMenuDrawerProps> = ({
               activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                onClose();
+                closeDrawer();
                 setTimeout(() => {
                   onLogoutPress();
-                }, 150);
+                }, 200);
               }}
             >
               <LogOut size={18} color="#EF4444" />
@@ -248,7 +336,7 @@ export const FacebookMenuDrawer: React.FC<FacebookMenuDrawerProps> = ({
 
             <Text style={styles.brandFooter}>Stalk • BDBook App v1.0.0</Text>
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -258,19 +346,20 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "flex-end",
   },
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
   },
   drawer: {
     backgroundColor: "#F8FAFC",
     height: "100%",
     shadowColor: "#000",
     shadowOffset: { width: -4, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 24,
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 25,
   },
   header: {
     flexDirection: "row",
@@ -438,4 +527,3 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
-
