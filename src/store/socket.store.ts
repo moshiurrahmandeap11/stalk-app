@@ -1,7 +1,11 @@
 import { io, Socket } from "socket.io-client";
+import { AppState } from "react-native";
 import { create } from "zustand";
 import { ENV } from "../config/env";
 import { Storage } from "../utils/storage";
+import { presentSystemNotification } from "../utils/notifications";
+import { playReceiveSound } from "../utils/chatSounds";
+import { useChatHeadStore } from "./chathead.store";
 
 interface SocketState {
   socket: Socket | null;
@@ -87,6 +91,55 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       setTimeout(() => {
         useCallStore.getState().resetCall();
       }, 1500);
+    });
+
+    // Message & Notification background/foreground handlers
+    const handleIncomingMessage = (newMsg: any) => {
+      // Don't alert if the sender is ourselves
+      if (newMsg?.senderId && newMsg.senderId === user?.id) return;
+
+      const isBackground = AppState.currentState !== "active";
+      if (isBackground) {
+        presentSystemNotification({
+          title: newMsg?.senderName || "New Message",
+          body:
+            newMsg?.messageType === "image"
+              ? "📷 Sent a photo"
+              : newMsg?.messageType === "video"
+              ? "🎥 Sent a video"
+              : newMsg?.messageType === "file"
+              ? `📎 Sent a file: ${newMsg?.fileName || ""}`
+              : newMsg?.message || "Sent you a message",
+          channelId: "messages",
+          data: {
+            type: "message",
+            conversationId: newMsg?.conversationId || newMsg?.senderId,
+            senderId: newMsg?.senderId,
+          },
+        });
+      } else {
+        useChatHeadStore.getState().incrementUnreadCount();
+        playReceiveSound();
+      }
+    };
+
+    socketInstance.on("receive_message", handleIncomingMessage);
+    socketInstance.on("new_message", handleIncomingMessage);
+    socketInstance.on("new_group_message", handleIncomingMessage);
+
+    socketInstance.on("new_notification", (notif: any) => {
+      const isBackground = AppState.currentState !== "active";
+      if (isBackground) {
+        presentSystemNotification({
+          title: notif?.actor?.fullName || "Notification",
+          body: notif?.message || "You have a new notification",
+          channelId: "default",
+          data: {
+            type: "notification",
+            postId: notif?.postId,
+          },
+        });
+      }
     });
 
     set({ socket: socketInstance });

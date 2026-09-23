@@ -8,6 +8,8 @@ const RECEIVE_SOUND_URI =
   "https://assets.mixkit.co/active_storage/sfx/2344/2344-preview.mp3"; // Clean Messenger chime
 const REACTION_SOUND_URI =
   "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"; // Crisp reaction pop
+const NOTIFICATION_SOUND_URI =
+  "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"; // Facebook "tong" chime
 
 let AudioModule: any = null;
 let isAudioChecked = false;
@@ -182,3 +184,35 @@ export const playReactionSound = async () => {
     // Graceful fallback
   }
 };
+
+let notificationSoundObject: any = null;
+
+export const playNotificationSound = async () => {
+  try {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (!isSoundEnabled) return;
+
+    if (Platform.OS === "web" && typeof window !== "undefined" && (window as any).Audio) {
+      new (window as any).Audio(NOTIFICATION_SOUND_URI).play().catch(() => {});
+      return;
+    }
+
+    const Audio = getAudioModule();
+    if (!Audio) return;
+
+    await setupAudio();
+
+    if (!notificationSoundObject) {
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: NOTIFICATION_SOUND_URI },
+        { volume: 0.85, shouldPlay: true }
+      );
+      notificationSoundObject = sound;
+    } else {
+      await notificationSoundObject.replayAsync();
+    }
+  } catch {
+    // Graceful fallback to haptics
+  }
+};
+

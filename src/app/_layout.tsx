@@ -6,6 +6,9 @@ import { useColorScheme } from "react-native";
 import { useAuthStore } from "../store/auth.store";
 import { useSocketStore } from "../store/socket.store";
 import { IncomingCallBanner } from "../components/call/IncomingCallBanner";
+import { InAppNotificationBanner } from "../components/notification/InAppNotificationBanner";
+import { FloatingChatHead } from "../components/chathead/FloatingChatHead";
+import { setupNotificationChannels, addNotificationResponseListener } from "../utils/notifications";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,6 +35,23 @@ export default function RootLayout() {
     restoreSession().finally(() => {
       SplashScreen.hideAsync();
     });
+    setupNotificationChannels();
+
+    const unsubscribe = addNotificationResponseListener((data) => {
+      if (data?.type === "message" && data?.conversationId) {
+        router.push(`/chat/${data.conversationId}` as any);
+      } else if (data?.type === "notification") {
+        if (data?.postId) {
+          router.push(`/post/${data.postId}` as any);
+        } else {
+          router.push("/notifications" as any);
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -71,6 +91,8 @@ export default function RootLayout() {
           <Stack.Screen name="call" options={{ animation: "fade" }} />
         </Stack>
         <IncomingCallBanner />
+        <InAppNotificationBanner />
+        <FloatingChatHead />
       </ThemeProvider>
     </QueryClientProvider>
   );

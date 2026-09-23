@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useAnimatedStyle,
@@ -18,6 +18,7 @@ import { InstagramReelsIcon, InstagramPostIcon } from "./InstagramIcons";
 import { FacebookMenuDrawer } from "./FacebookMenuDrawer";
 import { FacebookActionSheet } from "../ui/FacebookActionSheet";
 import { useAuthStore } from "../../store/auth.store";
+import { useChatHeadStore } from "../../store/chathead.store";
 import { getMediaUrl } from "../../utils/media";
 
 export interface AnimatedTabBarProps {
@@ -43,6 +44,7 @@ const TabItem: React.FC<TabItemProps> = ({
 }) => {
   const scale = useSharedValue(1);
   const user = useAuthStore((s) => s.user);
+  const unreadMessagesCount = useChatHeadStore((s) => s.unreadMessagesCount);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -92,7 +94,18 @@ const TabItem: React.FC<TabItemProps> = ({
           />
         );
       case "messages":
-        return <MessageCircle size={size} color={color} strokeWidth={strokeWidth} />;
+        return (
+          <View style={styles.iconContainer}>
+            <MessageCircle size={size} color={color} strokeWidth={strokeWidth} />
+            {unreadMessagesCount > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>
+                  {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
+                </Text>
+              </View>
+            )}
+          </View>
+        );
       case "profile": {
         const avatarUrl = user?.profilePicUrl || user?.avatar;
         if (avatarUrl) {
@@ -280,5 +293,29 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     backgroundColor: "#E2E8F0",
+  },
+  iconContainer: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabBadge: {
+    position: "absolute",
+    top: -4,
+    right: -8,
+    backgroundColor: "#EF4444",
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+  },
+  tabBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "800",
   },
 });

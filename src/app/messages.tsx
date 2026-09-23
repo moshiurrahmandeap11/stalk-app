@@ -13,18 +13,23 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { ArrowLeft, MessageSquare, Users, Plus } from "lucide-react-native";
+import { ArrowLeft, MessageSquare, Users, Plus, MoreVertical, Volume2, MessageCircle } from "lucide-react-native";
 import { messageService } from "../services/message.service";
 import { IConversation } from "../interfaces/message.interface";
 import { useAuthStore } from "../store/auth.store";
 import { useSocketStore } from "../store/socket.store";
-import { playReceiveSound } from "../utils/chatSounds";
+import { useChatHeadStore } from "../store/chathead.store";
+import { FacebookActionSheet } from "../components/ui/FacebookActionSheet";
+import { playReceiveSound, setChatSoundsEnabled, isChatSoundsEnabled } from "../utils/chatSounds";
 import { CreateGroupModal } from "../components/chat/CreateGroupModal";
 
 export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = {}) {
   const router = useRouter();
   const currentUserId = useAuthStore((s) => s.user?.id);
   const { socket } = useSocketStore();
+  const { isChatHeadEnabled, toggleChatHeadEnabled } = useChatHeadStore();
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [isSoundsActive, setIsSoundsActive] = useState(isChatSoundsEnabled());
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [convList, setConvList] = useState<IConversation[]>([]);
   const [typingUsers, setTypingUsers] = useState<{ [userId: string]: boolean }>({});
@@ -117,14 +122,24 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
           <View style={{ width: 12 }} />
         )}
         <Text style={styles.headerTitle}>Chats</Text>
-        <TouchableOpacity
-          style={styles.newGroupBtn}
-          activeOpacity={0.7}
-          onPress={() => setShowCreateGroup(true)}
-        >
-          <Users size={18} color="#3B82F6" />
-          <Text style={styles.newGroupBtnText}>New Group</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.newGroupBtn}
+            activeOpacity={0.7}
+            onPress={() => setShowCreateGroup(true)}
+          >
+            <Users size={17} color="#3B82F6" />
+            <Text style={styles.newGroupBtnText}>New Group</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.moreOptionsBtn}
+            activeOpacity={0.7}
+            onPress={() => setShowOptionsMenu(true)}
+          >
+            <MoreVertical size={20} color="#0F172A" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Conversations List */}
@@ -230,6 +245,39 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
           router.push(`/chat/${newGroup.id}` as any);
         }}
       />
+
+      {/* Facebook-style Messenger Options Sheet */}
+      <FacebookActionSheet
+        visible={showOptionsMenu}
+        title="Messenger Options"
+        actions={[
+          {
+            id: "chat-head-toggle",
+            label: isChatHeadEnabled ? "Turn OFF Chat Heads" : "Turn ON Chat Heads",
+            subLabel: isChatHeadEnabled
+              ? "Floating chat bubble is enabled"
+              : "Enable floating bubble over apps",
+            icon: MessageCircle,
+            onPress: () => {
+              toggleChatHeadEnabled();
+            },
+          },
+          {
+            id: "sound-toggle",
+            label: isSoundsActive ? "Mute Message Sounds" : "Enable Message Sounds",
+            subLabel: isSoundsActive
+              ? "Sound chimes are active"
+              : "Play sound when receiving messages",
+            icon: Volume2,
+            onPress: () => {
+              const next = !isSoundsActive;
+              setChatSoundsEnabled(next);
+              setIsSoundsActive(next);
+            },
+          },
+        ]}
+        onClose={() => setShowOptionsMenu(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -248,6 +296,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E2E8F0",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  moreOptionsBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
   },
   backBtn: {
     width: 38,
