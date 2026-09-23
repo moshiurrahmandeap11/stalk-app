@@ -104,7 +104,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useCallStore.setState({ callState: "ended" });
       setTimeout(() => {
         useCallStore.getState().resetCall();
-      }, 700);
+      }, 1200);
     });
 
     socketInstance.on("call_ended", () => {
@@ -118,7 +118,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useCallStore.setState({ callState: "ended" });
       setTimeout(() => {
         useCallStore.getState().resetCall();
-      }, 700);
+      }, 1200);
     });
 
     socketInstance.on("call_busy", () => {
@@ -132,7 +132,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useCallStore.setState({ callState: "ended" });
       setTimeout(() => {
         useCallStore.getState().resetCall();
-      }, 1000);
+      }, 1500);
     });
 
     // Message & Notification background/foreground handlers
@@ -186,6 +186,16 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             postId: notif?.postId,
           },
         });
+      }
+    });
+
+    // Auto-reconnect socket when app returns to foreground
+    AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        const currentSocket = get().socket;
+        if (currentSocket && !currentSocket.connected) {
+          currentSocket.connect();
+        }
       }
     });
 

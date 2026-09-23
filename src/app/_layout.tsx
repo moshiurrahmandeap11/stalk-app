@@ -20,6 +20,7 @@ import { Image } from "expo-image";
 import { useAuthStore } from "../store/auth.store";
 import { useSocketStore } from "../store/socket.store";
 import { IncomingCallBanner } from "../components/call/IncomingCallBanner";
+import { OngoingCallBar } from "../components/call/OngoingCallBar";
 import { InAppNotificationBanner } from "../components/notification/InAppNotificationBanner";
 import { FloatingChatHead } from "../components/chathead/FloatingChatHead";
 import {
@@ -135,6 +136,7 @@ export default function RootLayout() {
           <Stack.Screen name="call" options={{ animation: "fade" }} />
         </Stack>
         <IncomingCallBanner />
+        <OngoingCallBar />
         <InAppNotificationBanner />
         <FloatingChatHead />
 

@@ -17,10 +17,11 @@ export interface IMessage {
   senderProfilePicture?: string | null;
   receiverId?: string | null;
   message: string;
-  messageType: "text" | "image" | "video" | "file" | "share";
+  messageType: "text" | "image" | "video" | "file" | "share" | "audio_call" | "video_call" | "missed_call";
   mediaUrl?: string | null;
   fileName?: string | null;
   fileSize?: number | null;
+  callDuration?: number | null;
   isRead: boolean;
   isDelivered: boolean;
   createdAt: string;

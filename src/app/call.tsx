@@ -85,10 +85,9 @@ export default function CallScreen() {
     }, 400);
 
     return () => {
-      // If the screen unmounts while in a call or ended, ensure call state and hardware are reset cleanly
+      // Only clean up if the call has actually been ended
       const state = useCallStore.getState().callState;
-      if (state !== "idle") {
-        useCallStore.getState().endCall();
+      if (state === "ended") {
         useCallStore.getState().resetCall();
       }
     };
@@ -168,10 +167,8 @@ export default function CallScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.minimizeBtn}
-          onPress={() => {
-            endCall();
-            router.back();
-          }}
+          onPress={() => router.back()}
+          accessibilityLabel="Minimize call"
         >
           <ChevronDown size={28} color="#FFFFFF" />
         </TouchableOpacity>

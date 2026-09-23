@@ -22,6 +22,7 @@ import {
   ArrowLeft,
   Send,
   Phone,
+  PhoneOff,
   Video,
   Users,
   Camera,
@@ -60,6 +61,13 @@ interface IParsedReply {
   replySender: string;
   replySnippet: string;
   text: string;
+}
+
+function formatCallDuration(seconds?: number | null): string {
+  if (!seconds || seconds <= 0) return "00:00";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
 function parseMessageContent(rawMsg?: string | null): IParsedReply {
@@ -563,6 +571,7 @@ export default function ChatScreen() {
           </View>
         </TouchableOpacity>
 
+        {/* Audio & Video Call Buttons */}
         {/* Audio, Video Call & Pop Chat Head Buttons */}
         <View style={styles.callActions}>
           <TouchableOpacity
@@ -694,13 +703,69 @@ export default function ChatScreen() {
                     </TouchableOpacity>
                   ) : null}
 
-                  {/* Rich Media View (Image, Video, File) */}
-                  {item.messageType && item.messageType !== "text" ? (
+                  {/* Call Log Record View */}
+                  {item.messageType === "audio_call" ||
+                  item.messageType === "video_call" ||
+                  item.messageType === "missed_call" ? (
+                    <View style={styles.callRecordCard}>
+                      <View
+                        style={[
+                          styles.callRecordIconWrapper,
+                          item.messageType === "missed_call"
+                            ? styles.callRecordMissed
+                            : styles.callRecordSuccess,
+                        ]}
+                      >
+                        {item.messageType === "video_call" ? (
+                          <Video size={18} color="#FFFFFF" />
+                        ) : item.messageType === "missed_call" ? (
+                          <PhoneOff size={18} color="#FFFFFF" />
+                        ) : (
+                          <Phone size={18} color="#FFFFFF" />
+                        )}
+                      </View>
+                      <View style={styles.callRecordInfo}>
+                        <Text
+                          style={[
+                            styles.callRecordTitle,
+                            item.messageType === "missed_call"
+                              ? styles.callRecordTitleMissed
+                              : styles.callRecordTitleNormal,
+                          ]}
+                        >
+                          {item.messageType === "missed_call"
+                            ? "Missed Call"
+                            : item.messageType === "video_call"
+                            ? "Video Call"
+                            : "Audio Call"}
+                        </Text>
+                        <Text style={styles.callRecordSubtitle}>
+                          {item.callDuration && item.callDuration > 0
+                            ? formatCallDuration(item.callDuration)
+                            : isMine
+                            ? "No answer"
+                            : "Missed"}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.callBackBtn}
+                        onPress={() =>
+                          handleStartCall(item.messageType === "video_call" ? "video" : "audio")
+                        }
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.callBackText}>Call Back</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : item.messageType && item.messageType !== "text" ? (
                     <MediaMessageView message={item} isMine={isMine} />
                   ) : null}
 
                   {/* Text Content */}
-                  {text ? (
+                  {text &&
+                  item.messageType !== "audio_call" &&
+                  item.messageType !== "video_call" &&
+                  item.messageType !== "missed_call" ? (
                     <Text
                       style={[
                         styles.bubbleText,
@@ -1258,5 +1323,57 @@ const styles = StyleSheet.create({
   sendBtnDisabled: {
     backgroundColor: "#E4E6EB",
     opacity: 0.6,
+  },
+  callRecordCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    gap: 10,
+    minWidth: 220,
+  },
+  callRecordIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  callRecordSuccess: {
+    backgroundColor: "#10B981",
+  },
+  callRecordMissed: {
+    backgroundColor: "#EF4444",
+  },
+  callRecordInfo: {
+    flex: 1,
+  },
+  callRecordTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  callRecordTitleNormal: {
+    color: "#111827",
+  },
+  callRecordTitleMissed: {
+    color: "#EF4444",
+  },
+  callRecordSubtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  callBackBtn: {
+    backgroundColor: "#EBF5FF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  callBackText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#0A7CFF",
   },
 });

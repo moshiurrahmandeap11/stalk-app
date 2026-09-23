@@ -1,13 +1,28 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/**
- * Safe notification service interface.
- * Real-time notifications in Stalk are powered by Socket.io and rendered
- * through InAppNotificationBanner and FloatingChatHead, avoiding the need
- * for unconfigured native Firebase / push daemon background crashes.
- */
+import { PermissionsAndroid, Platform } from "react-native";
+
+export const requestNotificationPermission = async (): Promise<boolean> => {
+  if (Platform.OS === "android" && Platform.Version >= 33) {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        {
+          title: "Stalk Notifications",
+          message: "Allow Stalk to send you notifications for calls, messages, and updates.",
+          buttonPositive: "Allow",
+          buttonNegative: "Don't allow",
+        }
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      console.warn("[requestNotificationPermission] error:", err);
+      return false;
+    }
+  }
+  return true;
+};
 
 export const setupNotificationChannels = async (): Promise<boolean> => {
-  return true;
+  return requestNotificationPermission();
 };
 
 export interface LocalNotificationPayload {

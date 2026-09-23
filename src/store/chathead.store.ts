@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { Platform, Alert, Linking } from "react-native";
 import { Storage } from "../utils/storage";
 
 interface ChatHeadState {
@@ -44,11 +45,49 @@ export const useChatHeadStore = create<ChatHeadState>((set, get) => ({
     const next = !get().isChatHeadEnabled;
     await Storage.setItem("chatHeadEnabled", String(next));
     set({ isChatHeadEnabled: next });
+    if (next && Platform.OS === "android") {
+      Alert.alert(
+        "Display Over Other Apps",
+        "To allow Chat Heads to float over other apps like Messenger, please grant 'Display over other apps' in Android settings.",
+        [
+          { text: "Later", style: "cancel" },
+          {
+            text: "Open Settings",
+            onPress: () => {
+              Linking.sendIntent("android.settings.action.MANAGE_OVERLAY_PERMISSION", [
+                { key: "data", value: "package:com.stalk.app" },
+              ]).catch(() => {
+                Linking.openSettings().catch(() => {});
+              });
+            },
+          },
+        ]
+      );
+    }
   },
 
   async setChatHeadEnabled(enabled: boolean) {
     await Storage.setItem("chatHeadEnabled", String(enabled));
     set({ isChatHeadEnabled: enabled });
+    if (enabled && Platform.OS === "android") {
+      Alert.alert(
+        "Display Over Other Apps",
+        "To allow Chat Heads to float over other apps like Messenger, please grant 'Display over other apps' in Android settings.",
+        [
+          { text: "Later", style: "cancel" },
+          {
+            text: "Open Settings",
+            onPress: () => {
+              Linking.sendIntent("android.settings.action.MANAGE_OVERLAY_PERMISSION", [
+                { key: "data", value: "package:com.stalk.app" },
+              ]).catch(() => {
+                Linking.openSettings().catch(() => {});
+              });
+            },
+          },
+        ]
+      );
+    }
   },
 
   setChatHeadOpen(open: boolean) {
