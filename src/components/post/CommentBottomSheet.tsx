@@ -204,7 +204,7 @@ export const CommentBottomSheet: React.FC<CommentBottomSheetProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    backgroundColor: "transparent",
     justifyContent: "flex-end",
   },
   dismissOverlay: {
@@ -215,6 +215,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 18,
+    elevation: 24,
     overflow: "hidden",
   },
   header: {

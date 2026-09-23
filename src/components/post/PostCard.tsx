@@ -33,6 +33,8 @@ import { SharedPostPreview } from "./SharedPostPreview";
 import { ShareModal } from "./ShareModal";
 import { CommentBottomSheet } from "./CommentBottomSheet";
 import { FeedVideoPlayer } from "./FeedVideoPlayer";
+import { ImageViewerModal } from "./ImageViewerModal";
+import { FeedReelModal } from "./FeedReelModal";
 import { getMediaUrl } from "../../utils/media";
 import { updateFeedCacheItem } from "../../utils/feedCache";
 
@@ -99,6 +101,10 @@ export const PostCard: React.FC<PostCardProps> = ({
   // Share state
   const [showShareModal, setShowShareModal] = useState(false);
   const [sharesCount, setSharesCount] = useState(post.sharesCount ?? 0);
+
+  // Media Viewers (Facebook Style)
+  const [showImageViewer, setShowImageViewer] = useState(false);
+  const [showReelModal, setShowReelModal] = useState(false);
 
   // Sync props when post updates
   useEffect(() => {
@@ -449,12 +455,16 @@ export const PostCard: React.FC<PostCardProps> = ({
       {/* Media Rendering: Facebook-style auto-play video or Image */}
       {mediaUri && !post.isShare ? (
         isVideo ? (
-          <FeedVideoPlayer uri={mediaUri} isVisible={isVisible} />
+          <FeedVideoPlayer
+            uri={mediaUri}
+            isVisible={isVisible}
+            onPressVideo={() => setShowReelModal(true)}
+          />
         ) : (
           <TouchableOpacity
             style={styles.mediaContainer}
             activeOpacity={0.9}
-            onPress={() => setShowCommentSheet(true)}
+            onPress={() => setShowImageViewer(true)}
           >
             <Image
               source={{ uri: mediaUri }}
@@ -576,6 +586,27 @@ export const PostCard: React.FC<PostCardProps> = ({
           updateFeedCacheItem(postId, (p) => ({ ...p, commentsCount: nextCount }));
         }}
       />
+
+      {/* Facebook-style Fullscreen Image Viewer Modal */}
+      <ImageViewerModal
+        visible={showImageViewer}
+        post={post}
+        onClose={() => setShowImageViewer(false)}
+        onPressComment={() => setShowCommentSheet(true)}
+      />
+
+      {/* Facebook-style Fullscreen Reel / Video Player Modal */}
+      {isVideo && (
+        <FeedReelModal
+          visible={showReelModal}
+          post={post}
+          isLiked={isUpvoted}
+          likesCount={likesCount}
+          onPressLike={handleUpvote}
+          onPressComment={() => setShowCommentSheet(true)}
+          onClose={() => setShowReelModal(false)}
+        />
+      )}
     </View>
   );
 };

@@ -13,9 +13,14 @@ import Animated, {
 interface FeedVideoPlayerProps {
   uri: string;
   isVisible: boolean;
+  onPressVideo?: () => void;
 }
 
-export const FeedVideoPlayer: React.FC<FeedVideoPlayerProps> = ({ uri, isVisible }) => {
+export const FeedVideoPlayer: React.FC<FeedVideoPlayerProps> = ({
+  uri,
+  isVisible,
+  onPressVideo,
+}) => {
   const [isMuted, setIsMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(true);
   const playIconOpacity = useSharedValue(0);
@@ -64,7 +69,7 @@ export const FeedVideoPlayer: React.FC<FeedVideoPlayerProps> = ({ uri, isVisible
   return (
     <TouchableOpacity
       activeOpacity={0.95}
-      onPress={handleTogglePlay}
+      onPress={onPressVideo || handleTogglePlay}
       style={styles.container}
     >
       <VideoView
