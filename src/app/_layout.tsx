@@ -1,14 +1,31 @@
-import React, { useEffect } from "react";
-import { DarkTheme, DefaultTheme, ThemeProvider, Stack, useRouter, useSegments } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
+  Stack,
+  useRouter,
+  useSegments,
+} from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as SplashScreen from "expo-splash-screen";
-import { useColorScheme } from "react-native";
+import { useColorScheme, StyleSheet, View } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+} from "react-native-reanimated";
+import { Image } from "expo-image";
 import { useAuthStore } from "../store/auth.store";
 import { useSocketStore } from "../store/socket.store";
 import { IncomingCallBanner } from "../components/call/IncomingCallBanner";
 import { InAppNotificationBanner } from "../components/notification/InAppNotificationBanner";
 import { FloatingChatHead } from "../components/chathead/FloatingChatHead";
-import { setupNotificationChannels, addNotificationResponseListener } from "../utils/notifications";
+import {
+  setupNotificationChannels,
+  addNotificationResponseListener,
+} from "../utils/notifications";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -31,9 +48,24 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
+  const [showLaunchOverlay, setShowLaunchOverlay] = useState(true);
+  const launchOpacity = useSharedValue(1);
+  const launchScale = useSharedValue(1);
+
+  const animatedLaunchStyle = useAnimatedStyle(() => ({
+    opacity: launchOpacity.value,
+    transform: [{ scale: launchScale.value }],
+  }));
+
   useEffect(() => {
     restoreSession().finally(() => {
       SplashScreen.hideAsync();
+      launchScale.value = withTiming(1.06, { duration: 550 });
+      launchOpacity.value = withTiming(0, { duration: 420 }, (finished) => {
+        if (finished) {
+          runOnJS(setShowLaunchOverlay)(false);
+        }
+      });
     });
     setupNotificationChannels();
 
@@ -93,8 +125,39 @@ export default function RootLayout() {
         <IncomingCallBanner />
         <InAppNotificationBanner />
         <FloatingChatHead />
+
+        {/* Seamless Stalk Launch Screen with Brand Logo */}
+        {showLaunchOverlay && (
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.launchOverlay, animatedLaunchStyle]}
+          >
+            <Image
+              source={require("../../assets/images/splash-icon.png")}
+              style={styles.launchLogo}
+              contentFit="contain"
+            />
+          </Animated.View>
+        )}
       </ThemeProvider>
     </QueryClientProvider>
   );
 }
 
+const styles = StyleSheet.create({
+  launchOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 999999,
+  },
+  launchLogo: {
+    width: 240,
+    height: 85,
+  },
+});
