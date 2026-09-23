@@ -27,7 +27,7 @@ import {
   addNotificationResponseListener,
 } from "../utils/notifications";
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,16 +58,27 @@ export default function RootLayout() {
   }));
 
   useEffect(() => {
-    restoreSession().finally(() => {
-      SplashScreen.hideAsync();
-      launchScale.value = withTiming(1.06, { duration: 550 });
-      launchOpacity.value = withTiming(0, { duration: 420 }, (finished) => {
-        if (finished) {
-          runOnJS(setShowLaunchOverlay)(false);
-        }
+    // Safety fallback: Ensure launch overlay is always dismissed after 1.2s max
+    const fallbackTimer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+      setShowLaunchOverlay(false);
+    }, 1200);
+
+    restoreSession()
+      .catch((err) => {
+        console.warn("[RootLayout] restoreSession warning:", err);
+      })
+      .finally(() => {
+        SplashScreen.hideAsync().catch(() => {});
+        launchScale.value = withTiming(1.06, { duration: 450 });
+        launchOpacity.value = withTiming(0, { duration: 350 }, (finished) => {
+          if (finished) {
+            runOnJS(setShowLaunchOverlay)(false);
+          }
+        });
       });
-    });
-    setupNotificationChannels();
+
+    setupNotificationChannels().catch(() => {});
 
     const unsubscribe = addNotificationResponseListener((data) => {
       if (data?.type === "message" && data?.conversationId) {
@@ -82,6 +93,7 @@ export default function RootLayout() {
     });
 
     return () => {
+      clearTimeout(fallbackTimer);
       unsubscribe();
     };
   }, []);

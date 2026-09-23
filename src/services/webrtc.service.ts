@@ -1,24 +1,48 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Platform } from "react-native";
+import React from "react";
 import { useSocketStore } from "../store/socket.store";
 
-// Safely require react-native-webrtc so Expo Go does not crash when bundling
-let webrtcModule: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  webrtcModule = require("react-native-webrtc");
-} catch (e) {
-  console.warn(
-    "[WebRTC] Native react-native-webrtc module not available in current environment (e.g. Expo Go):",
-    e
-  );
+// Lazy-loaded WebRTC module to protect initial app launch lifecycle
+let cachedWebRTCModule: any = null;
+let hasCheckedWebRTCModule = false;
+
+export function getWebRTCModule(): any {
+  if (hasCheckedWebRTCModule) {
+    return cachedWebRTCModule;
+  }
+  hasCheckedWebRTCModule = true;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedWebRTCModule = require("react-native-webrtc");
+  } catch (e) {
+    console.warn(
+      "[WebRTC] Native react-native-webrtc module not available in current environment:",
+      e
+    );
+    cachedWebRTCModule = null;
+  }
+
+  return cachedWebRTCModule;
 }
 
-export const isWebRTCSupported = Boolean(
-  webrtcModule && webrtcModule.RTCPeerConnection && webrtcModule.mediaDevices
-);
+/**
+ * Checks if WebRTC native engine is supported in current runtime
+ */
+export const isWebRTCSupported = (): boolean => {
+  const mod = getWebRTCModule();
+  return Boolean(mod && mod.RTCPeerConnection && mod.mediaDevices);
+};
 
-export const RTCView = webrtcModule?.RTCView || null;
+/**
+ * Safe, lazy RTCView wrapper component
+ */
+export const RTCView = (props: any) => {
+  const mod = getWebRTCModule();
+  const NativeRTCView = mod?.RTCView;
+  if (!NativeRTCView) return null;
+  return React.createElement(NativeRTCView, props);
+};
 
 const ICE_SERVERS = {
   iceServers: [
@@ -47,14 +71,15 @@ class WebRTCService {
    * Initializes local media stream (camera & microphone)
    */
   public async startLocalStream(type: "audio" | "video"): Promise<any> {
-    if (!isWebRTCSupported) {
-      console.log("[WebRTC] Native module not loaded, using mock stream mode.");
+    const mod = getWebRTCModule();
+    if (!mod || !mod.mediaDevices) {
+      console.log("[WebRTC] Native module not loaded, using fallback stream mode.");
       return null;
     }
 
     try {
       const isVideo = type === "video";
-      const stream = await webrtcModule.mediaDevices.getUserMedia({
+      const stream = await mod.mediaDevices.getUserMedia({
         audio: true,
         video: isVideo
           ? {
@@ -81,12 +106,13 @@ class WebRTCService {
     targetUserId: string,
     onRemoteStreamUpdate: (stream: any) => void
   ): any {
-    if (!isWebRTCSupported) return null;
+    const mod = getWebRTCModule();
+    if (!mod || !mod.RTCPeerConnection) return null;
 
     this.targetUserId = targetUserId;
     this.pendingCandidates = [];
 
-    const pc = new webrtcModule.RTCPeerConnection(ICE_SERVERS);
+    const pc = new mod.RTCPeerConnection(ICE_SERVERS);
     this.pc = pc;
 
     // Attach local media tracks
@@ -137,7 +163,8 @@ class WebRTCService {
     targetUserId: string,
     onRemoteStreamUpdate: (stream: any) => void
   ): Promise<any> {
-    if (!isWebRTCSupported) {
+    const mod = getWebRTCModule();
+    if (!mod || !mod.RTCPeerConnection) {
       return { type: "offer", sdp: "dummy-offer" };
     }
 
@@ -160,20 +187,21 @@ class WebRTCService {
     offer: any,
     onRemoteStreamUpdate: (stream: any) => void
   ): Promise<any> {
-    if (!isWebRTCSupported) {
+    const mod = getWebRTCModule();
+    if (!mod || !mod.RTCPeerConnection) {
       return { type: "answer", sdp: "dummy-answer" };
     }
 
     this.createPeerConnection(targetUserId, onRemoteStreamUpdate);
 
-    const desc = new webrtcModule.RTCSessionDescription(offer);
+    const desc = new mod.RTCSessionDescription(offer);
     await this.pc.setRemoteDescription(desc);
 
     // Drain queued candidates if any
     while (this.pendingCandidates.length > 0) {
       const c = this.pendingCandidates.shift();
       try {
-        await this.pc.addIceCandidate(new webrtcModule.RTCIceCandidate(c));
+        await this.pc.addIceCandidate(new mod.RTCIceCandidate(c));
       } catch (err) {
         console.warn("[WebRTC] Error adding queued ICE candidate:", err);
       }
@@ -188,17 +216,18 @@ class WebRTCService {
    * Caller sets remote SDP Answer
    */
   public async handleAnswer(answer: any): Promise<void> {
-    if (!isWebRTCSupported || !this.pc) return;
+    const mod = getWebRTCModule();
+    if (!mod || !this.pc) return;
 
     try {
-      const desc = new webrtcModule.RTCSessionDescription(answer);
+      const desc = new mod.RTCSessionDescription(answer);
       await this.pc.setRemoteDescription(desc);
 
       // Drain queued candidates if any
       while (this.pendingCandidates.length > 0) {
         const c = this.pendingCandidates.shift();
         try {
-          await this.pc.addIceCandidate(new webrtcModule.RTCIceCandidate(c));
+          await this.pc.addIceCandidate(new mod.RTCIceCandidate(c));
         } catch (err) {
           console.warn("[WebRTC] Error adding queued ICE candidate:", err);
         }
@@ -212,7 +241,8 @@ class WebRTCService {
    * Handles incoming ICE Candidate
    */
   public async handleIceCandidate(candidate: any): Promise<void> {
-    if (!isWebRTCSupported || !candidate) return;
+    const mod = getWebRTCModule();
+    if (!mod || !candidate) return;
 
     if (!this.pc || !this.pc.remoteDescription) {
       this.pendingCandidates.push(candidate);
@@ -220,7 +250,7 @@ class WebRTCService {
     }
 
     try {
-      await this.pc.addIceCandidate(new webrtcModule.RTCIceCandidate(candidate));
+      await this.pc.addIceCandidate(new mod.RTCIceCandidate(candidate));
     } catch (err) {
       console.warn("[WebRTC] Error adding ICE candidate:", err);
     }
@@ -288,4 +318,3 @@ class WebRTCService {
 }
 
 export const webrtcService = new WebRTCService();
-
