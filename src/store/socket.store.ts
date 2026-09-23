@@ -94,24 +94,45 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socketInstance.on("call_rejected", () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { webrtcService } = require("../services/webrtc.service");
+      try {
+        webrtcService.cleanup();
+      } catch {
+        // ignore
+      }
       useCallStore.setState({ callState: "ended" });
       setTimeout(() => {
         useCallStore.getState().resetCall();
-      }, 1200);
+      }, 700);
     });
 
     socketInstance.on("call_ended", () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { webrtcService } = require("../services/webrtc.service");
+      try {
+        webrtcService.cleanup();
+      } catch {
+        // ignore
+      }
       useCallStore.setState({ callState: "ended" });
       setTimeout(() => {
         useCallStore.getState().resetCall();
-      }, 1200);
+      }, 700);
     });
 
     socketInstance.on("call_busy", () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { webrtcService } = require("../services/webrtc.service");
+      try {
+        webrtcService.cleanup();
+      } catch {
+        // ignore
+      }
       useCallStore.setState({ callState: "ended" });
       setTimeout(() => {
         useCallStore.getState().resetCall();
-      }, 1500);
+      }, 1000);
     });
 
     // Message & Notification background/foreground handlers
@@ -139,6 +160,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           },
         });
       } else {
+        useChatHeadStore.getState().showBubbleForConversation(
+          newMsg?.conversationId || newMsg?.senderId,
+          newMsg?.senderName || "Friend",
+          newMsg?.senderAvatar || newMsg?.senderProfilePicture || newMsg?.sender?.profilePicUrl
+        );
         useChatHeadStore.getState().incrementUnreadCount();
         playReceiveSound();
       }

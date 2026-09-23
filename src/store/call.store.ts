@@ -75,6 +75,9 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    // Completely wipe any stale call state before starting
+    get().resetCall();
+
     // 1. Initialize local media (camera/mic)
     const localStream = await getWebRTCService().startLocalStream(type);
 
@@ -108,11 +111,17 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   },
 
   setIncomingCall: (data) => {
-    // If already in a call, notify caller busy
-    if (get().callState !== "idle") {
+    // If actively in a connected or calling call, notify caller busy
+    const currentState = get().callState;
+    if (currentState === "connected" || currentState === "calling") {
       const socket = useSocketStore.getState().socket;
       socket?.emit("call_busy", { to: data.from });
       return;
+    }
+
+    // If previous call was ended or idle, accept new incoming call cleanly
+    if (currentState === "ended") {
+      get().resetCall();
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -193,16 +202,15 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     getWebRTCService().cleanup();
-    set({ callState: "ended" });
-
     if (timerInterval) {
       clearInterval(timerInterval);
       timerInterval = null;
     }
+    set({ callState: "ended" });
 
     setTimeout(() => {
       get().resetCall();
-    }, 1200);
+    }, 700);
   },
 
   toggleMute: () => {

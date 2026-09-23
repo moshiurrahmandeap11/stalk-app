@@ -83,6 +83,15 @@ export default function CallScreen() {
         true
       );
     }, 400);
+
+    return () => {
+      // If the screen unmounts while in a call or ended, ensure call state and hardware are reset cleanly
+      const state = useCallStore.getState().callState;
+      if (state !== "idle") {
+        useCallStore.getState().endCall();
+        useCallStore.getState().resetCall();
+      }
+    };
   }, []);
 
   // Auto exit screen when call ends or resets
@@ -122,8 +131,19 @@ export default function CallScreen() {
   };
 
   const isVideoCall = callType === "video";
-  const hasRemoteVideo = isVideoCall && remoteStream && RTCView;
-  const hasLocalVideo = isVideoCall && localStream && !isVideoOff && RTCView;
+  const hasRemoteVideo =
+    isVideoCall &&
+    remoteStream &&
+    typeof remoteStream.getVideoTracks === "function" &&
+    remoteStream.getVideoTracks().length > 0 &&
+    RTCView;
+  const hasLocalVideo =
+    isVideoCall &&
+    localStream &&
+    typeof localStream.getVideoTracks === "function" &&
+    localStream.getVideoTracks().length > 0 &&
+    !isVideoOff &&
+    RTCView;
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -136,6 +156,7 @@ export default function CallScreen() {
             streamURL={remoteStream.toURL()}
             objectFit="cover"
             style={StyleSheet.absoluteFill}
+            zOrder={0}
           />
           {/* Subtle gradient overlay on top and bottom for readability */}
           <View style={styles.videoOverlayTop} />
@@ -145,7 +166,13 @@ export default function CallScreen() {
 
       {/* Top Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.minimizeBtn} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.minimizeBtn}
+          onPress={() => {
+            endCall();
+            router.back();
+          }}
+        >
           <ChevronDown size={28} color="#FFFFFF" />
         </TouchableOpacity>
 
@@ -174,6 +201,7 @@ export default function CallScreen() {
             style={styles.localVideo}
             mirror={isFrontCamera}
             zOrder={1}
+            zOrderMediaOverlay={true}
           />
           <TouchableOpacity
             style={styles.pipFlipBtn}

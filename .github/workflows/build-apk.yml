@@ -83,3 +83,4 @@ jobs:
           files: build_output/stalk-app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

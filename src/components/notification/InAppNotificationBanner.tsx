@@ -20,6 +20,7 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Bell, MessageSquare, Heart, UserPlus } from "lucide-react-native";
 import { useSocketStore } from "../../store/socket.store";
+import { useAuthStore } from "../../store/auth.store";
 import { playNotificationSound } from "../../utils/chatSounds";
 import { getMediaUrl } from "../../utils/media";
 
@@ -79,10 +80,34 @@ export const InAppNotificationBanner: React.FC = () => {
       showBanner(data);
     };
 
+    const handleIncomingMessage = (msg: any) => {
+      const currentUserId = useAuthStore.getState().user?.id;
+      if (msg?.senderId === currentUserId) return;
+      showBanner({
+        id: msg?.id || String(Date.now()),
+        title: msg?.senderName || "New Message",
+        message:
+          msg?.messageType === "image"
+            ? "📷 Sent a photo"
+            : msg?.messageType === "video"
+            ? "🎥 Sent a video"
+            : msg?.message || "Sent you a message",
+        type: "message",
+        postId: msg?.conversationId || msg?.senderId,
+        actor: {
+          id: msg?.senderId,
+          fullName: msg?.senderName,
+          profilePicUrl: msg?.senderAvatar || msg?.senderProfilePicture,
+        },
+      });
+    };
+
     socket.on("new_notification", handleNewNotification);
+    socket.on("receive_message", handleIncomingMessage);
 
     return () => {
       socket.off("new_notification", handleNewNotification);
+      socket.off("receive_message", handleIncomingMessage);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [socket]);
@@ -115,7 +140,9 @@ export const InAppNotificationBanner: React.FC = () => {
   const handlePress = () => {
     Haptics.selectionAsync();
     hideBanner();
-    if (notification.postId) {
+    if (notification.type === "message") {
+      router.push(`/chat/${notification.postId}` as any);
+    } else if (notification.postId) {
       router.push(`/post/${notification.postId}` as any);
     } else {
       router.push("/notifications" as any);
@@ -124,6 +151,13 @@ export const InAppNotificationBanner: React.FC = () => {
 
   const renderTypeIcon = () => {
     const type = notification.type?.toLowerCase() || "";
+    if (type.includes("message")) {
+      return (
+        <View style={[styles.badgeIcon, { backgroundColor: "#0A7CFF" }]}>
+          <MessageSquare size={10} color="#FFFFFF" />
+        </View>
+      );
+    }
     if (type.includes("like") || type.includes("upvote")) {
       return (
         <View style={[styles.badgeIcon, { backgroundColor: "#EF4444" }]}>

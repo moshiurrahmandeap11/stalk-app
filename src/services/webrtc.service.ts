@@ -49,7 +49,18 @@ const ICE_SERVERS = {
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
+    {
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp",
+        "turns:openrelay.metered.ca:443?transport=tcp",
+      ],
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 class WebRTCService {
@@ -78,6 +89,22 @@ class WebRTCService {
     }
 
     try {
+      // Ensure any previously lingering local stream is stopped first
+      if (this.localStream) {
+        try {
+          this.localStream.getTracks().forEach((t: any) => {
+            t.enabled = false;
+            t.stop();
+          });
+          if (typeof this.localStream.release === "function") {
+            this.localStream.release();
+          }
+        } catch {
+          // ignore
+        }
+        this.localStream = null;
+      }
+
       const isVideo = type === "video";
       const stream = await mod.mediaDevices.getUserMedia({
         audio: true,
@@ -109,6 +136,15 @@ class WebRTCService {
     const mod = getWebRTCModule();
     if (!mod || !mod.RTCPeerConnection) return null;
 
+    if (this.pc) {
+      try {
+        this.pc.close();
+      } catch {
+        // ignore
+      }
+      this.pc = null;
+    }
+
     this.targetUserId = targetUserId;
     this.pendingCandidates = [];
 
@@ -124,6 +160,16 @@ class WebRTCService {
           console.warn("[WebRTC] Error adding track to peer connection:", e);
         }
       });
+    }
+
+    // Ensure audio & video transceivers are configured for sendrecv
+    try {
+      if (typeof pc.addTransceiver === "function") {
+        pc.addTransceiver("audio", { direction: "sendrecv" });
+        pc.addTransceiver("video", { direction: "sendrecv" });
+      }
+    } catch {
+      // Transceivers may already be implicitly created by addTrack
     }
 
     // ICE Candidate handler
@@ -142,6 +188,14 @@ class WebRTCService {
       if (event?.streams && event.streams[0]) {
         this.remoteStream = event.streams[0];
         onRemoteStreamUpdate(event.streams[0]);
+      } else if (event?.track) {
+        if (!this.remoteStream && mod.MediaStream) {
+          this.remoteStream = new mod.MediaStream();
+        }
+        if (this.remoteStream) {
+          this.remoteStream.addTrack(event.track);
+          onRemoteStreamUpdate(this.remoteStream);
+        }
       }
     };
 
@@ -294,12 +348,31 @@ class WebRTCService {
     if (this.localStream) {
       try {
         this.localStream.getTracks().forEach((track: any) => {
+          track.enabled = false;
           track.stop();
         });
+        if (typeof this.localStream.release === "function") {
+          this.localStream.release();
+        }
       } catch (err) {
         console.warn("[WebRTC] Error stopping local tracks:", err);
       }
       this.localStream = null;
+    }
+
+    if (this.remoteStream) {
+      try {
+        this.remoteStream.getTracks().forEach((track: any) => {
+          track.enabled = false;
+          track.stop();
+        });
+        if (typeof this.remoteStream.release === "function") {
+          this.remoteStream.release();
+        }
+      } catch {
+        // ignore
+      }
+      this.remoteStream = null;
     }
 
     if (this.pc) {
@@ -311,7 +384,6 @@ class WebRTCService {
       this.pc = null;
     }
 
-    this.remoteStream = null;
     this.targetUserId = null;
     this.pendingCandidates = [];
   }

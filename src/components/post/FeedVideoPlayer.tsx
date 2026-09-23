@@ -27,23 +27,29 @@ export const FeedVideoPlayer: React.FC<FeedVideoPlayerProps> = ({
 
   const player = useVideoPlayer(uri, (p) => {
     p.loop = true;
-    p.muted = isMuted;
+    p.muted = true;
+    p.volume = 0;
   });
 
   // Facebook-style auto-play when in viewport
   useEffect(() => {
     if (!player) return;
     if (isVisible && isPlaying) {
+      player.muted = isMuted;
+      player.volume = isMuted ? 0 : 1;
       player.play();
     } else {
       player.pause();
+      player.muted = true;
+      player.volume = 0;
     }
-  }, [isVisible, isPlaying, player]);
+  }, [isVisible, isPlaying, isMuted, player]);
 
   // Handle Mute toggle
   useEffect(() => {
     if (player) {
       player.muted = isMuted;
+      player.volume = isMuted ? 0 : 1;
     }
   }, [isMuted, player]);
 
@@ -56,10 +62,9 @@ export const FeedVideoPlayer: React.FC<FeedVideoPlayerProps> = ({
     setIsPlaying(!isPlaying);
   };
 
-  const handleToggleMute = (e: any) => {
-    e.stopPropagation?.();
+  const handleToggleMute = () => {
     Haptics.selectionAsync();
-    setIsMuted(!isMuted);
+    setIsMuted((prev) => !prev);
   };
 
   const playOverlayStyle = useAnimatedStyle(() => ({
@@ -67,30 +72,33 @@ export const FeedVideoPlayer: React.FC<FeedVideoPlayerProps> = ({
   }));
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.95}
-      onPress={onPressVideo || handleTogglePlay}
-      style={styles.container}
-    >
-      <VideoView
-        player={player}
-        style={styles.video}
-        contentFit="cover"
-        nativeControls={false}
-      />
+    <View style={styles.container}>
+      <TouchableOpacity
+        activeOpacity={0.95}
+        onPress={onPressVideo || handleTogglePlay}
+        style={StyleSheet.absoluteFill}
+      >
+        <VideoView
+          player={player}
+          style={styles.video}
+          contentFit="cover"
+          nativeControls={false}
+        />
 
-      {/* Center Play/Pause Flash Icon */}
-      <Animated.View style={[styles.centerIndicator, playOverlayStyle]} pointerEvents="none">
-        <View style={styles.iconCircle}>
-          <Play size={28} color="#FFFFFF" fill="#FFFFFF" />
-        </View>
-      </Animated.View>
+        {/* Center Play/Pause Flash Icon */}
+        <Animated.View style={[styles.centerIndicator, playOverlayStyle]} pointerEvents="none">
+          <View style={styles.iconCircle}>
+            <Play size={28} color="#FFFFFF" fill="#FFFFFF" />
+          </View>
+        </Animated.View>
+      </TouchableOpacity>
 
-      {/* Bottom Mute Button */}
+      {/* Bottom Mute Button - Sibling to prevent click propagation */}
       <TouchableOpacity
         style={styles.muteBtn}
         activeOpacity={0.8}
         onPress={handleToggleMute}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         {isMuted ? (
           <VolumeX size={16} color="#FFFFFF" />
@@ -98,7 +106,7 @@ export const FeedVideoPlayer: React.FC<FeedVideoPlayerProps> = ({
           <Volume2 size={16} color="#FFFFFF" />
         )}
       </TouchableOpacity>
-    </TouchableOpacity>
+    </View>
   );
 };
 

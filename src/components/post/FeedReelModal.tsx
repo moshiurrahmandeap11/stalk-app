@@ -70,16 +70,20 @@ export const FeedReelModal: React.FC<FeedReelModalProps> = ({
     if (!player) return;
     if (visible) {
       player.muted = isMuted;
+      player.volume = isMuted ? 0 : 1;
       player.play();
       setIsPlaying(true);
     } else {
       player.pause();
+      player.muted = true;
+      player.volume = 0;
     }
-  }, [visible, player]);
+  }, [visible, isMuted, player]);
 
   useEffect(() => {
     if (player) {
       player.muted = isMuted;
+      player.volume = isMuted ? 0 : 1;
     }
   }, [isMuted, player]);
 

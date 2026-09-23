@@ -13,7 +13,9 @@ interface ChatHeadState {
   setChatHeadEnabled: (enabled: boolean) => Promise<void>;
   setChatHeadOpen: (open: boolean) => void;
   openChatHead: (conversationId?: string, title?: string, avatar?: string) => void;
+  showBubbleForConversation: (conversationId: string, title?: string, avatar?: string) => void;
   closeChatHead: () => void;
+  dismissChatHead: () => void;
   incrementUnreadCount: (count?: number) => void;
   resetUnreadCount: () => void;
   loadPreferences: () => Promise<void>;
@@ -62,8 +64,26 @@ export const useChatHeadStore = create<ChatHeadState>((set, get) => ({
     });
   },
 
+  showBubbleForConversation(conversationId, title, avatar) {
+    set({
+      activeConversationId: conversationId || null,
+      activeConversationTitle: title || null,
+      activeConversationAvatar: avatar || null,
+    });
+  },
+
   closeChatHead() {
     set({ isChatHeadOpen: false });
+  },
+
+  dismissChatHead() {
+    set({
+      isChatHeadOpen: false,
+      activeConversationId: null,
+      activeConversationTitle: null,
+      activeConversationAvatar: null,
+      unreadMessagesCount: 0,
+    });
   },
 
   incrementUnreadCount(count = 1) {

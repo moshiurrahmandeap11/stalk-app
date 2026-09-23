@@ -30,12 +30,14 @@ import {
   Check,
   CheckCheck,
   CornerUpLeft,
+  MessageCircle,
 } from "lucide-react-native";
 import { messageService } from "../../services/message.service";
 import { userService } from "../../services/user.service";
 import { useAuthStore } from "../../store/auth.store";
 import { useSocketStore } from "../../store/socket.store";
 import { useCallStore } from "../../store/call.store";
+import { useChatHeadStore } from "../../store/chathead.store";
 import { IMessage, IMessageReaction } from "../../interfaces/message.interface";
 import { MessengerReactionPicker } from "../../components/chat/MessengerReactionPicker";
 import { ReplyPreviewBar } from "../../components/chat/ReplyPreviewBar";
@@ -561,8 +563,19 @@ export default function ChatScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Audio & Video Call Buttons */}
+        {/* Audio, Video Call & Pop Chat Head Buttons */}
         <View style={styles.callActions}>
+          <TouchableOpacity
+            style={styles.callBtn}
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.selectionAsync();
+              useChatHeadStore.getState().showBubbleForConversation(id!, chatTitle, avatarUri);
+              router.back();
+            }}
+          >
+            <MessageCircle size={20} color="#0A7CFF" />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.callBtn}
             activeOpacity={0.7}

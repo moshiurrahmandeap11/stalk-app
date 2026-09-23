@@ -196,8 +196,7 @@ export const FloatingChatHead: React.FC = () => {
         const dismissThresholdX = Math.abs(gesture.moveX - SCREEN_WIDTH / 2);
         if (gesture.moveY > dismissThresholdY && dismissThresholdX < 70) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          setChatHeadEnabled(false);
-          closeChatHead();
+          useChatHeadStore.getState().dismissChatHead();
           return;
         }
 
@@ -235,6 +234,9 @@ export const FloatingChatHead: React.FC = () => {
 
   if (!isAuthenticated || !isChatHeadEnabled) return null;
 
+  // IMPORTANT: Only show chat head if an active conversation or message partner is selected
+  if (!activeConversationId && !isChatHeadOpen) return null;
+
   const filteredConversations = conversations.filter((c) => {
     if (!searchQuery.trim()) return true;
     const name = c.name || c.participants?.find((p) => p.userId !== currentUserId)?.userName || "";
@@ -257,7 +259,9 @@ export const FloatingChatHead: React.FC = () => {
             />
           ) : (
             <View style={styles.defaultIconBox}>
-              <MessageCircle size={28} color="#FFFFFF" />
+              <Text style={{ color: "#FFFFFF", fontSize: 20, fontWeight: "700" }}>
+                {(activeConversationTitle || "Chat").charAt(0).toUpperCase()}
+              </Text>
             </View>
           )}
 
@@ -332,11 +336,11 @@ export const FloatingChatHead: React.FC = () => {
                   <Minus size={22} color="#475569" strokeWidth={2.5} />
                 </TouchableOpacity>
 
-                {/* Close Button */}
+                {/* Close Button - Completely dismisses chat head */}
                 <TouchableOpacity
                   style={styles.headerBtn}
                   onPress={() => {
-                    closeChatHead();
+                    useChatHeadStore.getState().dismissChatHead();
                   }}
                   activeOpacity={0.7}
                 >
