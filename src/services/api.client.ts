@@ -1,7 +1,11 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { ENV } from "../config/env";
 import { Storage } from "../utils/storage";
-import { useAuthStore } from "../store/auth.store";
+
+function getAuthStore() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("../store/auth.store").useAuthStore;
+}
 
 export const apiClient = axios.create({
   baseURL: `${ENV.API_BASE_URL}${ENV.API_PREFIX}`,
@@ -70,14 +74,14 @@ apiClient.interceptors.response.use(
     ) {
       // If refresh-token endpoint itself gave 401, the refresh token has expired -> LOGOUT!
       if (url.includes("/auth/refresh-token")) {
-        await useAuthStore.getState().logout();
+        await getAuthStore().getState().logout();
       }
       return Promise.reject(error);
     }
 
     // If this request was already retried once and failed again, session is invalid -> LOGOUT
     if (originalRequest._retry) {
-      await useAuthStore.getState().logout();
+      await getAuthStore().getState().logout();
       return Promise.reject(error);
     }
 
@@ -104,7 +108,7 @@ apiClient.interceptors.response.use(
       if (!storedRefreshToken) {
         // No refresh token available -> session is dead, log out user immediately
         processQueue(new Error("Session expired. Please log in again."), null);
-        await useAuthStore.getState().logout();
+        await getAuthStore().getState().logout();
         return Promise.reject(error);
       }
 
@@ -134,7 +138,7 @@ apiClient.interceptors.response.use(
       }
 
       // Update both persistent Storage and Zustand auth store
-      await useAuthStore.getState().setTokens(newAccessToken, newRefreshToken);
+      await getAuthStore().getState().setTokens(newAccessToken, newRefreshToken);
 
       // Release all queued requests with the new token
       processQueue(null, newAccessToken);
@@ -147,7 +151,7 @@ apiClient.interceptors.response.use(
     } catch (refreshErr) {
       // If refresh failed (e.g. 7-day token expired or rejected by server), LOG OUT!
       processQueue(refreshErr, null);
-      await useAuthStore.getState().logout();
+      await getAuthStore().getState().logout();
       return Promise.reject(refreshErr);
     } finally {
       isRefreshing = false;

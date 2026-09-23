@@ -1,5 +1,5 @@
-import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
+import { Platform } from "react-native";
 
 // High-performance lightweight audio chimes for chat
 const SEND_SOUND_URI =
@@ -9,9 +9,29 @@ const RECEIVE_SOUND_URI =
 const REACTION_SOUND_URI =
   "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"; // Crisp reaction pop
 
-let sendSoundObject: Audio.Sound | null = null;
-let receiveSoundObject: Audio.Sound | null = null;
-let reactionSoundObject: Audio.Sound | null = null;
+let AudioModule: any = null;
+let isAudioChecked = false;
+
+function getAudioModule(): any {
+  if (isAudioChecked) return AudioModule;
+  isAudioChecked = true;
+  try {
+    // Safely load expo-av if ExponentAV native module exists in this runtime
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const expoAv = require("expo-av");
+    if (expoAv && expoAv.Audio) {
+      AudioModule = expoAv.Audio;
+    }
+  } catch {
+    // ExponentAV native driver not available in standard Expo Go client
+    AudioModule = null;
+  }
+  return AudioModule;
+}
+
+let sendSoundObject: any = null;
+let receiveSoundObject: any = null;
+let reactionSoundObject: any = null;
 let isAudioConfigured = false;
 let isSoundEnabled = true;
 
@@ -23,6 +43,9 @@ export const isChatSoundsEnabled = () => isSoundEnabled;
 
 async function setupAudio() {
   if (isAudioConfigured) return;
+  const Audio = getAudioModule();
+  if (!Audio) return;
+
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
@@ -39,6 +62,9 @@ async function setupAudio() {
  * Preload sound objects in memory so playback triggers with 0ms latency.
  */
 export const preloadChatSounds = async () => {
+  const Audio = getAudioModule();
+  if (!Audio) return;
+
   try {
     await setupAudio();
 
@@ -74,6 +100,15 @@ export const playSendSound = async () => {
   try {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!isSoundEnabled) return;
+
+    if (Platform.OS === "web" && typeof window !== "undefined" && (window as any).Audio) {
+      new (window as any).Audio(SEND_SOUND_URI).play().catch(() => {});
+      return;
+    }
+
+    const Audio = getAudioModule();
+    if (!Audio) return;
+
     await setupAudio();
 
     if (!sendSoundObject) {
@@ -94,6 +129,15 @@ export const playReceiveSound = async () => {
   try {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (!isSoundEnabled) return;
+
+    if (Platform.OS === "web" && typeof window !== "undefined" && (window as any).Audio) {
+      new (window as any).Audio(RECEIVE_SOUND_URI).play().catch(() => {});
+      return;
+    }
+
+    const Audio = getAudioModule();
+    if (!Audio) return;
+
     await setupAudio();
 
     if (!receiveSoundObject) {
@@ -114,6 +158,15 @@ export const playReactionSound = async () => {
   try {
     Haptics.selectionAsync();
     if (!isSoundEnabled) return;
+
+    if (Platform.OS === "web" && typeof window !== "undefined" && (window as any).Audio) {
+      new (window as any).Audio(REACTION_SOUND_URI).play().catch(() => {});
+      return;
+    }
+
+    const Audio = getAudioModule();
+    if (!Audio) return;
+
     await setupAudio();
 
     if (!reactionSoundObject) {

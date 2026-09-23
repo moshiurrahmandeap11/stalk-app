@@ -2,7 +2,6 @@ import { io, Socket } from "socket.io-client";
 import { create } from "zustand";
 import { ENV } from "../config/env";
 import { Storage } from "../utils/storage";
-import { useCallStore } from "./call.store";
 
 interface SocketState {
   socket: Socket | null;
@@ -54,6 +53,9 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     // WebRTC Call Signaling Listeners
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useCallStore } = require("./call.store");
+
     socketInstance.on("incoming_call", (data: any) => {
       useCallStore.getState().setIncomingCall(data);
     });
