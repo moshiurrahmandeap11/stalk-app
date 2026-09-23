@@ -41,14 +41,15 @@
 
 ---
 
-### 2. Standalone Android APK Build & Startup Crash Resolution
-- **Status:** ✅ **COMPLETED & DEPLOYED (Build #2 Success)**
-- **Issues Resolved:**
-  - Removed unconfigured `expo-notifications` (missing `google-services.json` caused fatal `Default FirebaseApp is not initialized` crash on startup).
-  - Made `react-native-webrtc` native module lazy-loaded to prevent native binding stalls during boot.
-  - Fortified `SplashScreen` with promise rejection catchers and safety timeout fallback.
-  - Added explicit environment variables into `eas.json` for reliable build-time inlining.
-- **Latest APK Download:** [Download stalk-app.apk](https://expo.dev/artifacts/eas/RmLogvYUPP8XojeKtzsxrOW-Nx5LJb3GWFtBia-yfcc.apk)
+### 2. Standalone Android APK Startup Crash Resolution
+- **Status:** ✅ **RESOLVED & READY FOR BUILD #3**
+- **Root Causes Identified & Fixed:**
+  - **Removed Deprecated `expo-av`:** `expo-av` was autolinking `libexpo-av.so` into the APK. In SDK 57 (New Architecture / React Native 0.86), `expo-av` crashes during native initialization. Uninstalled `expo-av` completely and updated `chatSounds.ts`.
+  - **Disabled Experimental React Compiler:** `experiments.reactCompiler: true` in `app.json` auto-memoized Reanimated worklets (`useAnimatedStyle`, `useSharedValue`), causing fatal UI thread exceptions during launch screen animation. Removed `reactCompiler: true`.
+  - **Native Packaging (`expo-build-properties`):** Enabled `useLegacyPackaging: true` via `expo-build-properties` in `app.json` so native JNI `.so` libraries (such as `libjingle_peerconnection_so.so`) are properly extracted and accessible to `System.loadLibrary`.
+  - **Foreground Service Permissions:** Declared `android.permission.FOREGROUND_SERVICE` and `android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION` in `app.json` for Android 14/15 compatibility with WebRTC's `MediaProjectionService`.
+  - **Lazy WebRTC Evaluation:** Made `webrtcService` in `src/store/call.store.ts` strictly lazy-loaded on user call initiation, preventing native WebRTC instantiation during app boot.
+- **Previous Build Download:** [Download Build #2 APK](https://expo.dev/artifacts/eas/RmLogvYUPP8XojeKtzsxrOW-Nx5LJb3GWFtBia-yfcc.apk)
 
 ---
 

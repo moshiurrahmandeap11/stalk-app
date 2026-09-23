@@ -15,20 +15,7 @@ let AudioModule: any = null;
 let isAudioChecked = false;
 
 function getAudioModule(): any {
-  if (isAudioChecked) return AudioModule;
-  isAudioChecked = true;
-  try {
-    // Safely load expo-av if ExponentAV native module exists in this runtime
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const expoAv = require("expo-av");
-    if (expoAv && expoAv.Audio) {
-      AudioModule = expoAv.Audio;
-    }
-  } catch {
-    // ExponentAV native driver not available in standard Expo Go client
-    AudioModule = null;
-  }
-  return AudioModule;
+  return null;
 }
 
 let sendSoundObject: any = null;

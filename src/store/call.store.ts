@@ -3,7 +3,12 @@ import { create } from "zustand";
 import * as Haptics from "expo-haptics";
 import { useSocketStore } from "./socket.store";
 import { useAuthStore } from "./auth.store";
-import { webrtcService } from "../services/webrtc.service";
+
+function getWebRTCService(): any {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { webrtcService } = require("../services/webrtc.service");
+  return webrtcService;
+}
 
 export type CallState = "idle" | "calling" | "incoming" | "connected" | "ended";
 export type CallType = "audio" | "video";
@@ -71,7 +76,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     // 1. Initialize local media (camera/mic)
-    const localStream = await webrtcService.startLocalStream(type);
+    const localStream = await getWebRTCService().startLocalStream(type);
 
     set({
       callState: "calling",
@@ -88,7 +93,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     });
 
     // 2. Create WebRTC offer
-    const offer = await webrtcService.createOffer(partner.id, (remoteStream) => {
+    const offer = await getWebRTCService().createOffer(partner.id, (remoteStream: any) => {
       set({ remoteStream });
     });
 
@@ -141,14 +146,14 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     // 1. Start local camera/mic stream
-    const localStream = await webrtcService.startLocalStream(callType);
+    const localStream = await getWebRTCService().startLocalStream(callType);
     set({ localStream });
 
     // 2. Generate WebRTC answer from incoming offer
-    const answer = await webrtcService.handleOfferAndCreateAnswer(
+    const answer = await getWebRTCService().handleOfferAndCreateAnswer(
       partner.id,
       incomingOffer,
-      (remoteStream) => {
+      (remoteStream: any) => {
         set({ remoteStream });
       }
     );
@@ -175,7 +180,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    webrtcService.cleanup();
+    getWebRTCService().cleanup();
     get().resetCall();
   },
 
@@ -187,7 +192,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    webrtcService.cleanup();
+    getWebRTCService().cleanup();
     set({ callState: "ended" });
 
     if (timerInterval) {
@@ -203,14 +208,14 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   toggleMute: () => {
     Haptics.selectionAsync();
     const next = !get().isMuted;
-    webrtcService.toggleMute(next);
+    getWebRTCService().toggleMute(next);
     set({ isMuted: next });
   },
 
   toggleVideo: () => {
     Haptics.selectionAsync();
     const next = !get().isVideoOff;
-    webrtcService.toggleVideo(next);
+    getWebRTCService().toggleVideo(next);
     set({ isVideoOff: next });
   },
 
@@ -221,7 +226,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   switchCamera: () => {
     Haptics.selectionAsync();
-    webrtcService.switchCamera();
+    getWebRTCService().switchCamera();
     set((s) => ({ isFrontCamera: !s.isFrontCamera }));
   },
 
@@ -238,7 +243,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       clearInterval(timerInterval);
       timerInterval = null;
     }
-    webrtcService.cleanup();
+    getWebRTCService().cleanup();
     set({
       callState: "idle",
       partner: null,
