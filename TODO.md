@@ -1,70 +1,52 @@
 # Stalk Mobile App — Project TODO & Roadmap
 
-## 📌 Pending High-Priority Features
+## 📌 Features & Development Status
 
 ---
 
 ### 1. Real WebRTC Audio & Video Calling Implementation
-- **Status:** Planned / Pending Custom Dev Build
-- **Why Pending:** The app is currently running in **Expo Go**. WebRTC requires low-level C++ & Java native drivers (`react-native-webrtc`), which are **not supported in standard Expo Go**. This will be implemented once the app is ready for a **Development Build / Custom APK** (`expo-dev-client` / `npx expo run:android`).
+- **Status:** ✅ **COMPLETED (Ready for APK Build & Testing)**
+- **What Was Implemented:**
+  - **Native Packages Installed:** `react-native-webrtc` and `@config-plugins/react-native-webrtc`.
+  - **App Permissions Configured (`app.json`):** `CAMERA`, `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, `BLUETOOTH_CONNECT`, Android package `com.stalk.app`, iOS descriptions, and WebRTC config plugin.
+  - **WebRTC Service Engine (`src/services/webrtc.service.ts`):**
+    - Google STUN servers configured (`stun.l.google.com:19302`, `stun1.l.google.com:19302`, `stun2.l.google.com:19302`).
+    - Media acquisition: `mediaDevices.getUserMedia` for microphone and HD front camera.
+    - PeerConnection lifecycle: real SDP offer/answer generation, local/remote descriptions, and ICE candidate exchange.
+    - Hardware controls: real microphone mute/unmute, camera on/off, and front ⇄ back camera flipping (`_switchCamera`).
+    - Safe runtime fallback: ensures zero crashes when developing in standard Expo Go.
+  - **Store Integration (`src/store/call.store.ts` & `src/store/socket.store.ts`):**
+    - Real WebRTC streams (`localStream`, `remoteStream`) managed in Zustand.
+    - Signaling wired for `call_user`, `incoming_call`, `answer_call`, `call_accepted`, `ice_candidate`, `reject_call`, and `end_call`.
+  - **Call Screen UI (`src/app/call.tsx`):**
+    - Full-screen `<RTCView>` rendering partner's live video stream.
+    - Floating Picture-in-Picture (PIP) `<RTCView>` previewing self camera with camera flip button.
+    - Floating call tag and duration timer.
+    - Center animated audio pulse wave for audio calls.
+    - Glassmorphism bottom control island with Mute, Video, Speaker, and End Call buttons.
 
-#### Current State:
-- Socket.io signaling works (Call Ringing, Incoming Call Notification, Accept/Reject/End flow, Call Duration Timer).
-- `call.store.ts` sends dummy SDP string (`{ type: "offer", sdp: "mobile-signaling" }`).
-- Screen `src/app/call.tsx` currently shows user avatar placeholder with mock Mute/Video/Speaker toggles.
-
-#### Implementation Steps for APK Phase:
-1. **Install Native WebRTC Dependencies:**
+#### 🚀 How to Build Standalone APK:
+1. **Prebuild Native Android Project:**
    ```bash
-   npx expo install react-native-webrtc @config-plugins/react-native-webrtc expo-dev-client
+   npx expo prebuild --platform android
    ```
-2. **Configure Permissions in `app.json`:**
-   - Android: `CAMERA`, `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, `BLUETOOTH_CONNECT`.
-   - iOS: `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`.
-   - Add `@config-plugins/react-native-webrtc` to `plugins`.
-3. **WebRTC Core Setup (`src/services/webrtc.service.ts` or `src/store/call.store.ts`):**
-   - Initialize `RTCPeerConnection` with STUN servers:
-     ```typescript
-     const ICE_SERVERS = {
-       iceServers: [
-         { urls: "stun:stun.l.google.com:19302" },
-         { urls: "stun:stun1.l.google.com:19302" },
-         { urls: "stun:stun2.l.google.com:19302" },
-       ],
-     };
-     ```
-   - Capture local media:
-     ```typescript
-     const localStream = await mediaDevices.getUserMedia({
-       audio: true,
-       video: callType === "video" ? { facingMode: "user" } : false,
-     });
-     ```
-   - Exchange real SDP offer/answer through Socket.io (`offer`, `answer`).
-   - Exchange real ICE candidates (`ice_candidate`).
-   - Listen to `pc.ontrack` to receive and store `remoteStream`.
-4. **Call UI Integration (`src/app/call.tsx`):**
-   - Render `<RTCView streamURL={remoteStream.toURL()} style={styles.remoteVideo} objectFit="cover" />` for full-screen remote video.
-   - Render floating PIP `<RTCView streamURL={localStream.toURL()} style={styles.localVideoPip} zOrder={1} />` for self camera preview.
-   - For audio calls, display audio waveform / live pulse indicator with real audio active.
-5. **Hardware Audio Controls:**
-   - **Mute/Unmute:** Toggle `localStream.getAudioTracks()[0].enabled`.
-   - **Video On/Off:** Toggle `localStream.getVideoTracks()[0].enabled`.
-   - **Speakerphone / Earpiece Toggle:** Route audio using native audio manager or `InCallManager`.
-6. **Build & Test:**
-   - Run `npx expo prebuild`
-   - Run `npx expo run:android` or generate APK with EAS Build.
-   - Install APK on two physical Android phones and test live end-to-end voice and video.
+2. **Build and Run on Connected Physical Phone:**
+   ```bash
+   npx expo run:android --device
+   ```
+3. **Or Build Standalone APK via EAS:**
+   ```bash
+   npx eas-cli build -p android --profile preview
+   ```
 
 ---
 
 ### 2. Push Notifications (FCM / Expo Notifications)
-- **Status:** Planned
+- **Status:** 🟡 Planned
 - Integration of remote push notifications for incoming messages and calls when app is in the background or killed.
 
 ---
 
 ### 3. Story / Status Uploads
-- **Status:** Backlog
+- **Status:** ⚪ Backlog
 - 24-hour disappearing photo & video stories feed at the top of the home screen.
-

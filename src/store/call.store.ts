@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { create } from "zustand";
 import * as Haptics from "expo-haptics";
 import { useSocketStore } from "./socket.store";
 import { useAuthStore } from "./auth.store";
+import { webrtcService } from "../services/webrtc.service";
 
 export type CallState = "idle" | "calling" | "incoming" | "connected" | "ended";
 export type CallType = "audio" | "video";
@@ -20,9 +22,13 @@ interface CallStoreState {
   isMuted: boolean;
   isVideoOff: boolean;
   isSpeakerOn: boolean;
+  isFrontCamera: boolean;
+  localStream: any | null;
+  remoteStream: any | null;
+  incomingOffer: any | null;
 
   // Actions
-  startCall: (partner: ICallPartner, type: CallType) => void;
+  startCall: (partner: ICallPartner, type: CallType) => Promise<void>;
   setIncomingCall: (data: {
     from: string;
     fromName: string;
@@ -30,12 +36,14 @@ interface CallStoreState {
     type: CallType;
     offer?: any;
   }) => void;
-  acceptCall: () => void;
+  acceptCall: () => Promise<void>;
   rejectCall: () => void;
   endCall: () => void;
   toggleMute: () => void;
   toggleVideo: () => void;
   toggleSpeaker: () => void;
+  switchCamera: () => void;
+  setRemoteStream: (stream: any) => void;
   tickDuration: () => void;
   resetCall: () => void;
 }
@@ -50,22 +58,38 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   isMuted: false,
   isVideoOff: false,
   isSpeakerOn: false,
+  isFrontCamera: true,
+  localStream: null,
+  remoteStream: null,
+  incomingOffer: null,
 
-  startCall: (partner, type) => {
+  startCall: async (partner, type) => {
     const socket = useSocketStore.getState().socket;
     const user = useAuthStore.getState().user;
     if (!socket || !user) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    // 1. Initialize local media (camera/mic)
+    const localStream = await webrtcService.startLocalStream(type);
+
     set({
       callState: "calling",
       callType: type,
       partner,
+      localStream,
+      remoteStream: null,
+      incomingOffer: null,
       callDuration: 0,
       isMuted: false,
       isVideoOff: false,
       isSpeakerOn: type === "video",
+      isFrontCamera: true,
+    });
+
+    // 2. Create WebRTC offer
+    const offer = await webrtcService.createOffer(partner.id, (remoteStream) => {
+      set({ remoteStream });
     });
 
     socket.emit("call_user", {
@@ -74,7 +98,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       fromAvatar: user.profilePicUrl || null,
       type,
       to: partner.id,
-      offer: { type: "offer", sdp: "mobile-signaling" },
+      offer,
     });
   },
 
@@ -96,24 +120,43 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
         name: data.fromName || "Unknown Caller",
         avatar: data.fromAvatar || null,
       },
+      incomingOffer: data.offer || null,
+      localStream: null,
+      remoteStream: null,
       callDuration: 0,
       isMuted: false,
       isVideoOff: false,
       isSpeakerOn: data.type === "video",
+      isFrontCamera: true,
     });
   },
 
-  acceptCall: () => {
+  acceptCall: async () => {
     const socket = useSocketStore.getState().socket;
     const partner = get().partner;
-    if (socket && partner) {
-      socket.emit("answer_call", {
-        to: partner.id,
-        answer: { type: "answer", sdp: "mobile-signaling" },
-      });
-    }
+    const incomingOffer = get().incomingOffer;
+    const callType = get().callType;
+    if (!socket || !partner) return;
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // 1. Start local camera/mic stream
+    const localStream = await webrtcService.startLocalStream(callType);
+    set({ localStream });
+
+    // 2. Generate WebRTC answer from incoming offer
+    const answer = await webrtcService.handleOfferAndCreateAnswer(
+      partner.id,
+      incomingOffer,
+      (remoteStream) => {
+        set({ remoteStream });
+      }
+    );
+
+    socket.emit("answer_call", {
+      to: partner.id,
+      answer,
+    });
 
     // Start timer
     if (timerInterval) clearInterval(timerInterval);
@@ -132,6 +175,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    webrtcService.cleanup();
     get().resetCall();
   },
 
@@ -143,6 +187,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    webrtcService.cleanup();
     set({ callState: "ended" });
 
     if (timerInterval) {
@@ -157,17 +202,31 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   toggleMute: () => {
     Haptics.selectionAsync();
-    set((s) => ({ isMuted: !s.isMuted }));
+    const next = !get().isMuted;
+    webrtcService.toggleMute(next);
+    set({ isMuted: next });
   },
 
   toggleVideo: () => {
     Haptics.selectionAsync();
-    set((s) => ({ isVideoOff: !s.isVideoOff }));
+    const next = !get().isVideoOff;
+    webrtcService.toggleVideo(next);
+    set({ isVideoOff: next });
   },
 
   toggleSpeaker: () => {
     Haptics.selectionAsync();
     set((s) => ({ isSpeakerOn: !s.isSpeakerOn }));
+  },
+
+  switchCamera: () => {
+    Haptics.selectionAsync();
+    webrtcService.switchCamera();
+    set((s) => ({ isFrontCamera: !s.isFrontCamera }));
+  },
+
+  setRemoteStream: (remoteStream) => {
+    set({ remoteStream });
   },
 
   tickDuration: () => {
@@ -179,14 +238,18 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       clearInterval(timerInterval);
       timerInterval = null;
     }
+    webrtcService.cleanup();
     set({
       callState: "idle",
       partner: null,
+      incomingOffer: null,
+      localStream: null,
+      remoteStream: null,
       callDuration: 0,
       isMuted: false,
       isVideoOff: false,
       isSpeakerOn: false,
+      isFrontCamera: true,
     });
   },
 }));
-

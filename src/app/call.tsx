@@ -27,8 +27,10 @@ import {
   VolumeX,
   Lock,
   ChevronDown,
+  RefreshCw,
 } from "lucide-react-native";
 import { useCallStore } from "../store/call.store";
+import { RTCView, isWebRTCSupported } from "../services/webrtc.service";
 
 const { width } = Dimensions.get("window");
 
@@ -48,10 +50,14 @@ export default function CallScreen() {
     isMuted,
     isVideoOff,
     isSpeakerOn,
+    isFrontCamera,
+    localStream,
+    remoteStream,
     endCall,
     toggleMute,
     toggleVideo,
     toggleSpeaker,
+    switchCamera,
   } = useCallStore();
 
   const pulseRing1 = useSharedValue(1);
@@ -115,14 +121,32 @@ export default function CallScreen() {
     }
   };
 
+  const isVideoCall = callType === "video";
+  const hasRemoteVideo = isVideoCall && remoteStream && RTCView;
+  const hasLocalVideo = isVideoCall && localStream && !isVideoOff && RTCView;
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
 
+      {/* Full-screen Remote Video for Video Call */}
+      {hasRemoteVideo ? (
+        <View style={StyleSheet.absoluteFill}>
+          <RTCView
+            streamURL={remoteStream.toURL()}
+            objectFit="cover"
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Subtle gradient overlay on top and bottom for readability */}
+          <View style={styles.videoOverlayTop} />
+          <View style={styles.videoOverlayBottom} />
+        </View>
+      ) : null}
+
       {/* Top Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.minimizeBtn} onPress={() => router.back()}>
-          <ChevronDown size={28} color="#94A3B8" />
+          <ChevronDown size={28} color="#FFFFFF" />
         </TouchableOpacity>
 
         <View style={styles.securityBadge}>
@@ -130,26 +154,69 @@ export default function CallScreen() {
           <Text style={styles.securityText}>End-to-end encrypted</Text>
         </View>
 
-        <View style={{ width: 40 }} />
+        {isVideoCall && (
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={switchCamera}
+            activeOpacity={0.7}
+          >
+            <RefreshCw size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Center Avatar & Info */}
-      <View style={styles.centerSection}>
-        <View style={styles.avatarContainer}>
-          {callState !== "ended" ? (
-            <>
-              <Animated.View style={[styles.pulseRingOuter, animatedRingStyle2]} />
-              <Animated.View style={[styles.pulseRingInner, animatedRingStyle1]} />
-            </>
-          ) : null}
-          <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+      {/* Local Video PIP Preview (floating in top right) */}
+      {hasLocalVideo ? (
+        <View style={styles.localVideoPip}>
+          <RTCView
+            streamURL={localStream.toURL()}
+            objectFit="cover"
+            style={styles.localVideo}
+            mirror={isFrontCamera}
+            zOrder={1}
+          />
+          <TouchableOpacity
+            style={styles.pipFlipBtn}
+            onPress={switchCamera}
+            activeOpacity={0.8}
+          >
+            <RefreshCw size={12} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
+      ) : null}
 
-        <Text style={styles.partnerName}>{partner?.name || "User"}</Text>
-        <Text style={[styles.statusText, callState === "connected" && styles.connectedText]}>
-          {getStatusText()}
-        </Text>
-      </View>
+      {/* Center Section: Avatar & Info (Shown in Audio call or until Remote Video connects) */}
+      {!hasRemoteVideo ? (
+        <View style={styles.centerSection}>
+          <View style={styles.avatarContainer}>
+            {callState !== "ended" ? (
+              <>
+                <Animated.View style={[styles.pulseRingOuter, animatedRingStyle2]} />
+                <Animated.View style={[styles.pulseRingInner, animatedRingStyle1]} />
+              </>
+            ) : null}
+            <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+          </View>
+
+          <Text style={styles.partnerName}>{partner?.name || "User"}</Text>
+          <Text
+            style={[
+              styles.statusText,
+              callState === "connected" && styles.connectedText,
+            ]}
+          >
+            {getStatusText()}
+          </Text>
+        </View>
+      ) : (
+        /* Floating mini caller tag when full-screen video is active */
+        <View style={styles.floatingCallerTag}>
+          <Text style={styles.floatingCallerName}>{partner?.name || "User"}</Text>
+          <Text style={styles.floatingCallDuration}>
+            {formatDuration(callDuration)}
+          </Text>
+        </View>
+      )}
 
       {/* Bottom Control Bar */}
       <View style={styles.controlIsland}>
@@ -178,7 +245,9 @@ export default function CallScreen() {
           ) : (
             <VideoIcon size={24} color="#FFFFFF" />
           )}
-          <Text style={styles.controlLabel}>{isVideoOff ? "Start Video" : "Stop Video"}</Text>
+          <Text style={styles.controlLabel}>
+            {isVideoOff ? "Start Video" : "Stop Video"}
+          </Text>
         </TouchableOpacity>
 
         {/* Speaker Toggle */}
@@ -220,6 +289,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
+    zIndex: 10,
   },
   minimizeBtn: {
     width: 40,
@@ -227,11 +297,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   securityBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    backgroundColor: "rgba(16, 185, 129, 0.15)",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -240,6 +318,55 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: "#10B981",
+  },
+  videoOverlayTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    backgroundColor: "rgba(0, 0, 0, 0.35)",
+  },
+  videoOverlayBottom: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 160,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+  },
+  localVideoPip: {
+    position: "absolute",
+    top: 70,
+    right: 16,
+    width: 105,
+    height: 155,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    backgroundColor: "#1E293B",
+    zIndex: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  localVideo: {
+    width: "100%",
+    height: "100%",
+  },
+  pipFlipBtn: {
+    position: "absolute",
+    bottom: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   centerSection: {
     alignItems: "center",
@@ -293,6 +420,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
   },
+  floatingCallerTag: {
+    alignSelf: "flex-start",
+    marginLeft: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+  },
+  floatingCallerName: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  floatingCallDuration: {
+    color: "#10B981",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 2,
+  },
   controlIsland: {
     flexDirection: "row",
     alignItems: "center",
@@ -310,6 +456,7 @@ const styles = StyleSheet.create({
     elevation: 16,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.08)",
+    zIndex: 15,
   },
   controlBtn: {
     alignItems: "center",
@@ -345,4 +492,3 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 });
-

@@ -64,12 +64,33 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useCallStore.getState().setIncomingCall(data);
     });
 
-    socketInstance.on("call_accepted", () => {
+    socketInstance.on("call_accepted", async (data: any) => {
       useCallStore.setState({ callState: "connected" });
+      if (data?.answer) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { webrtcService } = require("../services/webrtc.service");
+        await webrtcService.handleAnswer(data.answer);
+      }
       const timer = setInterval(() => {
         useCallStore.getState().tickDuration();
       }, 1000);
       (useCallStore as any)._timer = timer;
+    });
+
+    socketInstance.on("answer", async (data: any) => {
+      if (data?.answer) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { webrtcService } = require("../services/webrtc.service");
+        await webrtcService.handleAnswer(data.answer);
+      }
+    });
+
+    socketInstance.on("ice_candidate", async (data: any) => {
+      if (data?.candidate) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { webrtcService } = require("../services/webrtc.service");
+        await webrtcService.handleIceCandidate(data.candidate);
+      }
     });
 
     socketInstance.on("call_rejected", () => {
