@@ -18,9 +18,13 @@ apiClient.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL || ""}${config.url || ""}`);
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    console.warn("[API Request Error]", error);
+    return Promise.reject(error);
+  }
 );
 
 // Queue for holding requests while token is refreshing
@@ -51,6 +55,7 @@ apiClient.interceptors.response.use(
 
     // If no config or error status is not 401, reject immediately
     if (!originalRequest || error.response?.status !== 401) {
+      console.warn(`[API Response Error] ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}:`, error.message, error.response?.data || "");
       return Promise.reject(error);
     }
 
