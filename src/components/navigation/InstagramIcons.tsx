@@ -1,5 +1,5 @@
 import React from "react";
-import Svg, { Rect, Line, Polygon } from "react-native-svg";
+import { View, StyleSheet } from "react-native";
 
 interface IconProps {
   size?: number;
@@ -8,98 +8,157 @@ interface IconProps {
   isFocused?: boolean;
 }
 
-export const InstagramReelsIcon: React.FC<IconProps> = ({
-  size = 26,
-  color = "#0F172A",
-  strokeWidth = 2,
-  isFocused = false,
-}) => {
-  const finalStroke = isFocused ? Math.max(strokeWidth, 2.4) : strokeWidth;
-
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {/* Outer Rounded Frame */}
-      <Rect
-        x="2.5"
-        y="2.5"
-        width="19"
-        height="19"
-        rx="5.5"
-        stroke={color}
-        strokeWidth={finalStroke}
-      />
-      {/* Upper Clapperboard Divider */}
-      <Line
-        x1="2.5"
-        y1="8.5"
-        x2="21.5"
-        y2="8.5"
-        stroke={color}
-        strokeWidth={finalStroke}
-      />
-      {/* Slanted Stripes */}
-      <Line
-        x1="8.5"
-        y1="2.5"
-        x2="6.5"
-        y2="8.5"
-        stroke={color}
-        strokeWidth={finalStroke}
-      />
-      <Line
-        x1="15"
-        y1="2.5"
-        x2="13"
-        y2="8.5"
-        stroke={color}
-        strokeWidth={finalStroke}
-      />
-      {/* Center Play Arrow */}
-      <Polygon points="10,12 16,15.5 10,19" fill={color} />
-    </Svg>
-  );
-};
-
 export const InstagramPostIcon: React.FC<IconProps> = ({
   size = 26,
   color = "#0F172A",
   strokeWidth = 2,
   isFocused = false,
 }) => {
-  const finalStroke = isFocused ? Math.max(strokeWidth, 2.4) : strokeWidth;
+  const border = isFocused ? Math.max(strokeWidth, 2.4) : strokeWidth;
+  const dimension = size - 2;
 
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {/* Rounded Square */}
-      <Rect
-        x="2.5"
-        y="2.5"
-        width="19"
-        height="19"
-        rx="5.5"
-        stroke={color}
-        strokeWidth={finalStroke}
+    <View
+      style={[
+        styles.postBox,
+        {
+          width: dimension,
+          height: dimension,
+          borderColor: color,
+          borderWidth: border,
+        },
+      ]}
+    >
+      {/* Vertical Bar */}
+      <View
+        style={[
+          styles.verticalBar,
+          {
+            backgroundColor: color,
+            width: border,
+            height: dimension * 0.48,
+          },
+        ]}
       />
-      {/* Plus Symbol */}
-      <Line
-        x1="12"
-        y1="7.5"
-        x2="12"
-        y2="16.5"
-        stroke={color}
-        strokeWidth={finalStroke}
-        strokeLinecap="round"
+      {/* Horizontal Bar */}
+      <View
+        style={[
+          styles.horizontalBar,
+          {
+            backgroundColor: color,
+            height: border,
+            width: dimension * 0.48,
+          },
+        ]}
       />
-      <Line
-        x1="7.5"
-        y1="12"
-        x2="16.5"
-        y2="12"
-        stroke={color}
-        strokeWidth={finalStroke}
-        strokeLinecap="round"
-      />
-    </Svg>
+    </View>
   );
 };
 
+export const InstagramReelsIcon: React.FC<IconProps> = ({
+  size = 26,
+  color = "#0F172A",
+  strokeWidth = 2,
+  isFocused = false,
+}) => {
+  const border = isFocused ? Math.max(strokeWidth, 2.4) : strokeWidth;
+  const dimension = size - 2;
+
+  return (
+    <View
+      style={[
+        styles.reelsBox,
+        {
+          width: dimension,
+          height: dimension,
+          borderColor: color,
+          borderWidth: border,
+        },
+      ]}
+    >
+      {/* Upper Clapperboard Strip */}
+      <View
+        style={[
+          styles.reelsHeader,
+          {
+            borderBottomColor: color,
+            borderBottomWidth: border * 0.9,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.reelsStripe,
+            { backgroundColor: color, width: border * 0.9, left: "28%" },
+          ]}
+        />
+        <View
+          style={[
+            styles.reelsStripe,
+            { backgroundColor: color, width: border * 0.9, left: "62%" },
+          ]}
+        />
+      </View>
+
+      {/* Center Play Arrow */}
+      <View style={styles.playArrowContainer}>
+        <View
+          style={[
+            styles.playTriangle,
+            {
+              borderLeftColor: color,
+              borderLeftWidth: dimension * 0.28,
+              borderTopWidth: dimension * 0.16,
+              borderBottomWidth: dimension * 0.16,
+            },
+          ]}
+        />
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  postBox: {
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  verticalBar: {
+    position: "absolute",
+    borderRadius: 1,
+  },
+  horizontalBar: {
+    position: "absolute",
+    borderRadius: 1,
+  },
+  reelsBox: {
+    borderRadius: 7,
+    overflow: "hidden",
+  },
+  reelsHeader: {
+    height: "34%",
+    width: "100%",
+    position: "relative",
+    overflow: "hidden",
+  },
+  reelsStripe: {
+    position: "absolute",
+    top: -3,
+    bottom: -3,
+    transform: [{ rotate: "25deg" }],
+  },
+  playArrowContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: 2,
+  },
+  playTriangle: {
+    width: 0,
+    height: 0,
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent",
+    borderRightWidth: 0,
+  },
+});
