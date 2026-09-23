@@ -33,6 +33,8 @@ export const messageService = {
       message: string;
       messageType?: "text" | "image" | "video" | "file";
       mediaUrl?: string;
+      fileName?: string;
+      fileSize?: number;
       tempId?: string;
     }
   ): Promise<IMessage> {
@@ -49,6 +51,28 @@ export const messageService = {
       );
       return res.data.data;
     }
+  },
+
+  async uploadMedia(formData: FormData): Promise<{
+    mediaUrl: string;
+    fileType: "image" | "video" | "document";
+    fileName: string;
+    fileSize: number;
+  }> {
+    const res = await apiClient.post<{
+      success: boolean;
+      data: {
+        mediaUrl: string;
+        fileType: "image" | "video" | "document";
+        fileName: string;
+        fileSize: number;
+      };
+    }>("/messages/upload-message-media", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return res.data.data;
   },
 
   async createGroup(payload: ICreateGroupPayload): Promise<IConversation> {

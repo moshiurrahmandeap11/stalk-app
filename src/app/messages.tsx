@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -17,17 +17,91 @@ import { ArrowLeft, MessageSquare, Users, Plus } from "lucide-react-native";
 import { messageService } from "../services/message.service";
 import { IConversation } from "../interfaces/message.interface";
 import { useAuthStore } from "../store/auth.store";
+import { useSocketStore } from "../store/socket.store";
+import { playReceiveSound } from "../utils/chatSounds";
 import { CreateGroupModal } from "../components/chat/CreateGroupModal";
 
 export default function MessagesScreen() {
   const router = useRouter();
   const currentUserId = useAuthStore((s) => s.user?.id);
+  const { socket } = useSocketStore();
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [convList, setConvList] = useState<IConversation[]>([]);
+  const [typingUsers, setTypingUsers] = useState<{ [userId: string]: boolean }>({});
+  const typingTimersRef = useRef<{ [userId: string]: ReturnType<typeof setTimeout> }>({});
 
   const { data: conversations, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["conversations"],
     queryFn: () => messageService.getConversations(),
   });
+
+  useEffect(() => {
+    if (conversations) {
+      setConvList(conversations);
+    }
+  }, [conversations]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUserTyping = (data: { userId: string; isTyping: boolean }) => {
+      setTypingUsers((prev) => ({
+        ...prev,
+        [data.userId]: data.isTyping,
+      }));
+
+      if (data.isTyping) {
+        if (typingTimersRef.current[data.userId]) {
+          clearTimeout(typingTimersRef.current[data.userId]);
+        }
+        typingTimersRef.current[data.userId] = setTimeout(() => {
+          setTypingUsers((prev) => ({
+            ...prev,
+            [data.userId]: false,
+          }));
+        }, 3500);
+      }
+    };
+
+    const handleReceiveMessage = (newMsg: any) => {
+      playReceiveSound();
+      setConvList((prev) => {
+        const foundIdx = prev.findIndex(
+          (c) =>
+            c.id === newMsg.conversationId ||
+            c.participants?.some((p) => p.userId === newMsg.senderId)
+        );
+
+        if (foundIdx >= 0) {
+          const updated = [...prev];
+          const conv = { ...updated[foundIdx] };
+          conv.lastMessage =
+            newMsg.messageType === "image"
+              ? "📷 Photo"
+              : newMsg.messageType === "video"
+              ? "🎥 Video"
+              : newMsg.messageType === "file"
+              ? `📎 ${newMsg.fileName || "File"}`
+              : newMsg.message || "New message";
+          conv.unreadCount = (conv.unreadCount || 0) + 1;
+          updated.splice(foundIdx, 1);
+          return [conv, ...updated];
+        } else {
+          refetch();
+          return prev;
+        }
+      });
+    };
+
+    socket.on("user_typing", handleUserTyping);
+    socket.on("receive_message", handleReceiveMessage);
+
+    return () => {
+      socket.off("user_typing", handleUserTyping);
+      socket.off("receive_message", handleReceiveMessage);
+      Object.values(typingTimersRef.current).forEach((t) => clearTimeout(t));
+    };
+  }, [socket, refetch]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -56,7 +130,7 @@ export default function MessagesScreen() {
         </View>
       ) : (
         <FlatList
-          data={conversations || []}
+          data={convList}
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
           renderItem={({ item }) => {
@@ -72,6 +146,8 @@ export default function MessagesScreen() {
 
             const unread = otherParticipant?.unreadCount || item.unreadCount || 0;
             const targetId = isGroup ? item.id : otherParticipant?.userId || item.id;
+            const otherUserId = otherParticipant?.userId || "";
+            const isUserTyping = Boolean(typingUsers[otherUserId]);
 
             return (
               <TouchableOpacity
@@ -100,9 +176,21 @@ export default function MessagesScreen() {
                       </View>
                     ) : null}
                   </View>
-                  <Text style={styles.convLastMsg} numberOfLines={1}>
-                    {item.lastMessage || "No messages yet"}
-                  </Text>
+                  {isUserTyping ? (
+                    <Text style={styles.typingLastMsg} numberOfLines={1}>
+                      Typing...
+                    </Text>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.convLastMsg,
+                        unread > 0 && styles.convLastMsgUnread,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.lastMessage || "No messages yet"}
+                    </Text>
+                  )}
                 </View>
                 {unread > 0 ? (
                   <View style={styles.unreadBadge}>
@@ -251,6 +339,17 @@ const styles = StyleSheet.create({
   convLastMsg: {
     fontSize: 14,
     color: "#64748B",
+    marginTop: 4,
+  },
+  convLastMsgUnread: {
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  typingLastMsg: {
+    fontSize: 14,
+    color: "#0A7CFF",
+    fontWeight: "700",
+    fontStyle: "italic",
     marginTop: 4,
   },
   unreadBadge: {
