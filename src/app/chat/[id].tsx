@@ -108,31 +108,41 @@ export default function ChatScreen() {
   const peerTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const insets = useSafeAreaInsets();
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [navBarInset, setNavBarInset] = useState(insets.bottom || 24);
+
+  // Preserve the actual navigation bar inset when keyboard is closed
+  useEffect(() => {
+    if (!isKeyboardVisible && insets.bottom > 0) {
+      setNavBarInset(insets.bottom);
+    }
+  }, [insets.bottom, isKeyboardVisible]);
 
   useEffect(() => {
     preloadChatSounds();
   }, []);
 
   useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 50);
-      }
-    );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => {
-        setKeyboardHeight(0);
-      }
-    );
+    const onShow = () => {
+      setIsKeyboardVisible(true);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 60);
+    };
+    const onHide = () => {
+      setIsKeyboardVisible(false);
+    };
+
+    const showSub1 = Keyboard.addListener("keyboardDidShow", onShow);
+    const hideSub1 = Keyboard.addListener("keyboardDidHide", onHide);
+    const showSub2 = Keyboard.addListener("keyboardWillShow", onShow);
+    const hideSub2 = Keyboard.addListener("keyboardWillHide", onHide);
+
     return () => {
-      showSub.remove();
-      hideSub.remove();
+      showSub1.remove();
+      hideSub1.remove();
+      showSub2.remove();
+      hideSub2.remove();
     };
   }, []);
 
@@ -925,7 +935,13 @@ export default function ChatScreen() {
         )}
 
         {/* Input & Typing Container with Dynamic Keyboard Pinning */}
-        <View style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight : Math.max(insets.bottom, 6) }}>
+        <View
+          style={{
+            paddingBottom: isKeyboardVisible
+              ? (Platform.OS === "android" ? Math.max(navBarInset, 46) + 8 : 8)
+              : Math.max(insets.bottom, 8),
+          }}
+        >
           {/* Real-time Messenger Typing Indicator */}
           {isPeerTyping ? (
             <TypingBubble avatarUri={avatarUri} />

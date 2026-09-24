@@ -93,9 +93,6 @@ export const FloatingChatHead: React.FC = () => {
   const isDragging = useSharedValue(false);
   const [showDismissTarget, setShowDismissTarget] = useState(false);
 
-  // Keyboard height tracker
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
   // Chat window state
   const [conversations, setConversations] = useState<IConversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
@@ -108,26 +105,39 @@ export const FloatingChatHead: React.FC = () => {
 
   const flatListRef = useRef<FlatList>(null);
 
+  // Keyboard visibility tracker
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [navBarInset, setNavBarInset] = useState(insets.bottom || 24);
+
+  // Preserve the actual navigation bar inset when keyboard is closed
+  useEffect(() => {
+    if (!isKeyboardVisible && insets.bottom > 0) {
+      setNavBarInset(insets.bottom);
+    }
+  }, [insets.bottom, isKeyboardVisible]);
+
   // Keyboard listeners for perfect pinning
   useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 50);
-      }
-    );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => {
-        setKeyboardHeight(0);
-      }
-    );
+    const onShow = () => {
+      setIsKeyboardVisible(true);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 60);
+    };
+    const onHide = () => {
+      setIsKeyboardVisible(false);
+    };
+
+    const showSub1 = Keyboard.addListener("keyboardDidShow", onShow);
+    const hideSub1 = Keyboard.addListener("keyboardDidHide", onHide);
+    const showSub2 = Keyboard.addListener("keyboardWillShow", onShow);
+    const hideSub2 = Keyboard.addListener("keyboardWillHide", onHide);
+
     return () => {
-      showSub.remove();
-      hideSub.remove();
+      showSub1.remove();
+      hideSub1.remove();
+      showSub2.remove();
+      hideSub2.remove();
     };
   }, []);
 
@@ -553,10 +563,9 @@ export const FloatingChatHead: React.FC = () => {
             style={[
               styles.dropdownCard,
               {
-                paddingBottom:
-                  keyboardHeight > 0
-                    ? keyboardHeight
-                    : Math.max(insets.bottom, 10),
+                paddingBottom: isKeyboardVisible
+                  ? (Platform.OS === "android" ? Math.max(navBarInset, 46) + 8 : 8)
+                  : Math.max(insets.bottom, 10),
               },
             ]}
           >
