@@ -10,8 +10,9 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Keyboard,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
@@ -106,8 +107,33 @@ export default function ChatScreen() {
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const peerTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
   useEffect(() => {
     preloadChatSounds();
+  }, []);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 50);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
   // Check if conversation exists (e.g. group chat)
@@ -520,7 +546,7 @@ export default function ChatScreen() {
     : getMediaUrl(targetUser?.avatar || targetUser?.profilePicUrl);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -603,10 +629,7 @@ export default function ChatScreen() {
       </View>
 
       {/* Messages List */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
-      >
+      <View style={{ flex: 1 }}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#0A7CFF" />
@@ -901,76 +924,79 @@ export default function ChatScreen() {
           />
         )}
 
-        {/* Real-time Messenger Typing Indicator */}
-        {isPeerTyping ? (
-          <TypingBubble avatarUri={avatarUri} />
-        ) : null}
+        {/* Input & Typing Container with Dynamic Keyboard Pinning */}
+        <View style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight : Math.max(insets.bottom, 6) }}>
+          {/* Real-time Messenger Typing Indicator */}
+          {isPeerTyping ? (
+            <TypingBubble avatarUri={avatarUri} />
+          ) : null}
 
-        {/* Media Uploading Indicator Bar */}
-        {isUploadingMedia ? (
-          <View style={styles.uploadingBar}>
-            <ActivityIndicator size="small" color="#0A7CFF" />
-            <Text style={styles.uploadingText}>Sending attachment...</Text>
-          </View>
-        ) : null}
+          {/* Media Uploading Indicator Bar */}
+          {isUploadingMedia ? (
+            <View style={styles.uploadingBar}>
+              <ActivityIndicator size="small" color="#0A7CFF" />
+              <Text style={styles.uploadingText}>Sending attachment...</Text>
+            </View>
+          ) : null}
 
-        {/* Replying Preview Bar */}
-        <ReplyPreviewBar
-          replyMessage={replyMessage}
-          onCancelReply={() => setReplyMessage(null)}
-        />
-
-        {/* Messenger Action & Input Bar */}
-        <View style={styles.inputBar}>
-          {/* Media Attachment Actions */}
-          <View style={styles.attachmentActions}>
-            <TouchableOpacity
-              style={styles.attachBtn}
-              onPress={handlePickCamera}
-              activeOpacity={0.7}
-            >
-              <Camera size={20} color="#0A7CFF" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.attachBtn}
-              onPress={handlePickGallery}
-              activeOpacity={0.7}
-            >
-              <ImageIcon size={20} color="#0A7CFF" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.attachBtn}
-              onPress={handlePickDocument}
-              activeOpacity={0.7}
-            >
-              <Paperclip size={20} color="#0A7CFF" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Text Input */}
-          <TextInput
-            ref={inputRef}
-            placeholder="Type a message..."
-            placeholderTextColor="#8E8E93"
-            style={styles.inputField}
-            value={inputText}
-            onChangeText={handleTextChange}
-            multiline
+          {/* Replying Preview Bar */}
+          <ReplyPreviewBar
+            replyMessage={replyMessage}
+            onCancelReply={() => setReplyMessage(null)}
           />
 
-          {/* Send Button */}
-          <TouchableOpacity
-            style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
-            onPress={handleSendMessage}
-            disabled={!inputText.trim()}
-            activeOpacity={0.8}
-          >
-            <Send size={18} color="#FFFFFF" />
-          </TouchableOpacity>
+          {/* Messenger Action & Input Bar */}
+          <View style={styles.inputBar}>
+            {/* Media Attachment Actions */}
+            <View style={styles.attachmentActions}>
+              <TouchableOpacity
+                style={styles.attachBtn}
+                onPress={handlePickCamera}
+                activeOpacity={0.7}
+              >
+                <Camera size={20} color="#0A7CFF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.attachBtn}
+                onPress={handlePickGallery}
+                activeOpacity={0.7}
+              >
+                <ImageIcon size={20} color="#0A7CFF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.attachBtn}
+                onPress={handlePickDocument}
+                activeOpacity={0.7}
+              >
+                <Paperclip size={20} color="#0A7CFF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Text Input */}
+            <TextInput
+              ref={inputRef}
+              placeholder="Type a message..."
+              placeholderTextColor="#8E8E93"
+              style={styles.inputField}
+              value={inputText}
+              onChangeText={handleTextChange}
+              multiline
+            />
+
+            {/* Send Button */}
+            <TouchableOpacity
+              style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+              onPress={handleSendMessage}
+              disabled={!inputText.trim()}
+              activeOpacity={0.8}
+            >
+              <Send size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       {/* Messenger 6-Emoji Reaction Picker Modal & Action Sheet */}
       {(() => {

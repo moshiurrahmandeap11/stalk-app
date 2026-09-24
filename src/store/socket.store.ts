@@ -1,5 +1,5 @@
 import { io, Socket } from "socket.io-client";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { create } from "zustand";
 import { ENV } from "../config/env";
 import { Storage } from "../utils/storage";
@@ -141,9 +141,12 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       if (newMsg?.senderId && newMsg.senderId === user?.id) return;
 
       const isBackground = AppState.currentState !== "active";
+      const targetConvId = newMsg?.conversationId || newMsg?.senderId;
+      const targetSenderName = newMsg?.senderName || "Friend";
+
       if (isBackground) {
         presentSystemNotification({
-          title: newMsg?.senderName || "New Message",
+          title: targetSenderName,
           body:
             newMsg?.messageType === "image"
               ? "📷 Sent a photo"
@@ -155,17 +158,32 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           channelId: "messages",
           data: {
             type: "message",
-            conversationId: newMsg?.conversationId || newMsg?.senderId,
+            conversationId: targetConvId,
             senderId: newMsg?.senderId,
           },
         });
-      } else {
-        useChatHeadStore.getState().showBubbleForConversation(
-          newMsg?.conversationId || newMsg?.senderId,
-          newMsg?.senderName || "Friend",
-          newMsg?.senderAvatar || newMsg?.senderProfilePicture || newMsg?.sender?.profilePicUrl
-        );
-        useChatHeadStore.getState().incrementUnreadCount();
+
+        // Float bubble over other apps if enabled
+        const chatStore = useChatHeadStore.getState();
+        if (chatStore.isChatHeadEnabled && Platform.OS === "android") {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { NativeModules } = require("react-native");
+          NativeModules.ChatHeadModule?.showBubble(
+            targetConvId,
+            targetSenderName,
+            chatStore.unreadMessagesCount + 1
+          );
+        }
+      }
+
+      useChatHeadStore.getState().showBubbleForConversation(
+        targetConvId,
+        targetSenderName,
+        newMsg?.senderAvatar || newMsg?.senderProfilePicture || newMsg?.sender?.profilePicUrl,
+        newMsg?.senderId
+      );
+
+      if (!isBackground) {
         playReceiveSound();
       }
     };
@@ -190,11 +208,35 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     // Auto-reconnect socket when app returns to foreground
+    // Auto-reconnect socket and toggle native overlay on AppState change
     AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") {
+        // App is foregrounded: hide native system overlay so in-app chat head takes over
+        if (Platform.OS === "android") {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { NativeModules } = require("react-native");
+          NativeModules.ChatHeadModule?.hideBubble();
+        }
+
         const currentSocket = get().socket;
         if (currentSocket && !currentSocket.connected) {
           currentSocket.connect();
+        }
+      } else if (nextState === "background" || nextState === "inactive") {
+        // App minimized: show native bubble over other apps if chat head is active
+        const chatStore = useChatHeadStore.getState();
+        if (
+          chatStore.isChatHeadEnabled &&
+          chatStore.activeConversationId &&
+          Platform.OS === "android"
+        ) {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { NativeModules } = require("react-native");
+          NativeModules.ChatHeadModule?.showBubble(
+            chatStore.activeConversationId,
+            chatStore.activeConversationTitle || "Chat",
+            chatStore.unreadMessagesCount
+          );
         }
       }
     });

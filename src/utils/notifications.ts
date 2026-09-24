@@ -1,4 +1,4 @@
-import { PermissionsAndroid, Platform } from "react-native";
+import { NativeModules, PermissionsAndroid, Platform } from "react-native";
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (Platform.OS === "android" && Platform.Version >= 33) {
@@ -35,6 +35,7 @@ export interface LocalNotificationPayload {
 /**
  * Triggers notification presentation.
  * In-app banners and sounds are handled by InAppNotificationBanner and FloatingChatHead.
+ * Triggers native high-priority system notification (Heads-up with sound & vibration)
  */
 export const presentSystemNotification = async ({
   title,
@@ -43,6 +44,16 @@ export const presentSystemNotification = async ({
   channelId = "default",
 }: LocalNotificationPayload): Promise<void> => {
   // Safe no-op without requiring native FCM / Firebase configuration
+  try {
+    if (Platform.OS === "android") {
+      const { StalkNotificationModule } = NativeModules;
+      if (StalkNotificationModule?.showNotification) {
+        await StalkNotificationModule.showNotification(title, body, data, channelId);
+      }
+    }
+  } catch (err) {
+    console.warn("[presentSystemNotification] error:", err);
+  }
 };
 
 /**
