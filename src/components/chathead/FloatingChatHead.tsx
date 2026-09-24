@@ -106,6 +106,7 @@ export const FloatingChatHead: React.FC = () => {
   const flatListRef = useRef<FlatList>(null);
 
   // Keyboard visibility tracker
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [navBarInset, setNavBarInset] = useState(insets.bottom || 24);
 
@@ -118,14 +119,19 @@ export const FloatingChatHead: React.FC = () => {
 
   // Keyboard listeners for perfect pinning
   useEffect(() => {
-    const onShow = () => {
+    const onShow = (e: any) => {
       setIsKeyboardVisible(true);
+      const h = e?.endCoordinates?.height || 0;
+      if (h > 0) {
+        setKeyboardHeight(h);
+      }
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 60);
     };
     const onHide = () => {
       setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
     };
 
     const showSub1 = Keyboard.addListener("keyboardDidShow", onShow);
@@ -563,8 +569,10 @@ export const FloatingChatHead: React.FC = () => {
             style={[
               styles.dropdownCard,
               {
-                paddingBottom: isKeyboardVisible
-                  ? (Platform.OS === "android" ? Math.max(navBarInset, 46) + 8 : 8)
+                paddingBottom: keyboardHeight > 0
+                  ? keyboardHeight + (Platform.OS === "android" ? Math.max(navBarInset, 46) + 8 : 8)
+                  : isKeyboardVisible
+                  ? 280 + (Platform.OS === "android" ? Math.max(navBarInset, 46) + 8 : 8)
                   : Math.max(insets.bottom, 10),
               },
             ]}

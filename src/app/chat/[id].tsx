@@ -108,6 +108,7 @@ export default function ChatScreen() {
   const peerTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [navBarInset, setNavBarInset] = useState(insets.bottom || 24);
 
@@ -123,14 +124,19 @@ export default function ChatScreen() {
   }, []);
 
   useEffect(() => {
-    const onShow = () => {
+    const onShow = (e: any) => {
       setIsKeyboardVisible(true);
+      const h = e?.endCoordinates?.height || 0;
+      if (h > 0) {
+        setKeyboardHeight(h);
+      }
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 60);
     };
     const onHide = () => {
       setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
     };
 
     const showSub1 = Keyboard.addListener("keyboardDidShow", onShow);
@@ -937,8 +943,10 @@ export default function ChatScreen() {
         {/* Input & Typing Container with Dynamic Keyboard Pinning */}
         <View
           style={{
-            paddingBottom: isKeyboardVisible
-              ? (Platform.OS === "android" ? Math.max(navBarInset, 46) + 8 : 8)
+            paddingBottom: keyboardHeight > 0
+              ? keyboardHeight + (Platform.OS === "android" ? Math.max(navBarInset, 46) + 8 : 8)
+              : isKeyboardVisible
+              ? 280 + (Platform.OS === "android" ? Math.max(navBarInset, 46) + 8 : 8)
               : Math.max(insets.bottom, 8),
           }}
         >
