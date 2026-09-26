@@ -61,18 +61,20 @@ export const messageService = {
   }> {
     const res = await apiClient.post<{
       success: boolean;
-      data: {
-        mediaUrl: string;
-        fileType: "image" | "video" | "document";
-        fileName: string;
-        fileSize: number;
-      };
+      data: any;
     }>("/messages/upload-message-media", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
     });
-    return res.data.data;
+    const d = res.data?.data || {};
+    const rawType = d.fileType || d.type || "document";
+    return {
+      mediaUrl: d.mediaUrl || d.url || "",
+      fileType: rawType === "file" ? "document" : rawType,
+      fileName: d.fileName || d.name || "file",
+      fileSize: Number(d.fileSize || d.size || 0),
+    };
   },
 
   async createGroup(payload: ICreateGroupPayload): Promise<IConversation> {
