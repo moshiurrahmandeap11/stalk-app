@@ -673,10 +673,14 @@ export default function ChatScreen() {
   };
 
   const isOnline = onlineUsers.includes(id || "");
-  const chatTitle = isGroup ? currentConv?.name || "Group Chat" : targetUser?.fullName || "Chat";
+  const chatTitle = isGroup
+    ? currentConv?.name || currentConv?.friendName || "Group Chat"
+    : targetUser?.fullName || currentConv?.friendName || "Chat";
   const avatarUri = isGroup
-    ? (currentConv?.avatar ? getMediaUrl(currentConv.avatar) : DEFAULT_GROUP_AVATAR)
-    : (getMediaUrl(targetUser?.avatar || targetUser?.profilePicUrl) || DEFAULT_AVATAR);
+    ? (currentConv?.avatar || currentConv?.friendProfilePicture
+        ? getMediaUrl(currentConv.avatar || currentConv.friendProfilePicture)
+        : DEFAULT_GROUP_AVATAR)
+    : (getMediaUrl(targetUser?.avatar || targetUser?.profilePicUrl || currentConv?.friendProfilePicture) || DEFAULT_AVATAR);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>

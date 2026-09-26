@@ -154,19 +154,19 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
           renderItem={({ item }) => {
-            const isGroup = item.isGroup;
+            const isGroup = Boolean(item.isGroup);
             const otherParticipant = item.participants?.find((p) => p.userId !== currentUserId);
             const title = isGroup
-              ? item.name || "Group Chat"
-              : otherParticipant?.userName || "Chat";
+              ? item.name || item.friendName || "Group Chat"
+              : item.friendName || otherParticipant?.userName || otherParticipant?.name || item.name || "User";
             const avatar = isGroup
-              ? (item.avatar ? getMediaUrl(item.avatar) : DEFAULT_GROUP_AVATAR)
-              : (getMediaUrl(item.avatar || otherParticipant?.userProfilePicture) || DEFAULT_AVATAR);
+              ? (item.avatar || item.friendProfilePicture ? getMediaUrl(item.avatar || item.friendProfilePicture) : DEFAULT_GROUP_AVATAR)
+              : (getMediaUrl(item.friendProfilePicture || item.avatar || otherParticipant?.userProfilePicture || otherParticipant?.avatar) || DEFAULT_AVATAR);
 
             const unread = otherParticipant?.unreadCount || item.unreadCount || 0;
-            const targetId = isGroup ? item.id : otherParticipant?.userId || item.id;
-            const otherUserId = otherParticipant?.userId || "";
-            const isUserTyping = Boolean(typingUsers[otherUserId]);
+            const targetId = isGroup ? item.id : item.friendId || otherParticipant?.userId || item.id;
+            const otherUserId = isGroup ? "" : item.friendId || otherParticipant?.userId || "";
+            const isUserTyping = Boolean(otherUserId && typingUsers[otherUserId]);
 
             return (
               <TouchableOpacity

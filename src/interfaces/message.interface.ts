@@ -36,13 +36,20 @@ export interface IConversation {
   isGroup: boolean;
   name?: string | null;
   avatar?: string | null;
+  friendId?: string | null;
+  friendName?: string | null;
+  friendProfilePicture?: string | null;
   lastMessage?: string | null;
   lastMessageTime?: string | null;
   unreadCount?: number;
-  participants: {
+  updatedAt?: string | Date;
+  isRequest?: boolean;
+  participants?: {
     userId: string;
-    userName: string;
+    userName?: string;
+    name?: string;
     userProfilePicture?: string | null;
+    avatar?: string | null;
     unreadCount?: number;
   }[];
 }
