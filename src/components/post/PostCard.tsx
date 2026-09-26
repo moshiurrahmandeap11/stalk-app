@@ -41,7 +41,7 @@ import { CommentBottomSheet } from "./CommentBottomSheet";
 import { FeedVideoPlayer } from "./FeedVideoPlayer";
 import { ImageViewerModal } from "./ImageViewerModal";
 import { FeedReelModal } from "./FeedReelModal";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 import { updateFeedCacheItem } from "../../utils/feedCache";
 
 interface PostCardProps {
@@ -398,11 +398,9 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   const authorName = post.userName || post.user?.fullName || "User";
   const authorHandle = post.username || post.user?.username || authorName.toLowerCase().replace(/\s+/g, "");
-  const avatarUri = getMediaUrl(
-    post.userProfilePicture ||
-    post.user?.profilePicUrl ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-  );
+  const avatarUri =
+    getMediaUrl(post.userProfilePicture || post.user?.profilePicUrl) ||
+    DEFAULT_AVATAR;
 
   return (
     <View style={styles.card}>
