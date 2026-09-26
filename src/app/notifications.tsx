@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { ArrowLeft, Bell } from "lucide-react-native";
 import { apiClient } from "../services/api.client";
+import { getMediaUrl, DEFAULT_AVATAR } from "../utils/media";
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -45,8 +46,8 @@ export default function NotificationsScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => {
             const avatar =
-              item.actor?.profilePicUrl ||
-              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+              getMediaUrl(item.actor?.profilePicUrl || item.actor?.avatar) ||
+              DEFAULT_AVATAR;
 
             return (
               <View style={[styles.notifItem, !item.isRead && styles.unreadNotif]}>
