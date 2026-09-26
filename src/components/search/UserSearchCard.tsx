@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import { IUser } from "../../interfaces/user.interface";
 import { followService } from "../../services/follow.service";
 import { useAuthStore } from "../../store/auth.store";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 interface UserSearchCardProps {
   user: IUser;
@@ -66,9 +67,8 @@ export const UserSearchCard: React.FC<UserSearchCardProps> = ({ user }) => {
   };
 
   const avatarUri =
-    user.profilePicUrl ||
-    user.avatar ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+    getMediaUrl(user.profilePicUrl || user.avatar) ||
+    DEFAULT_AVATAR;
 
   return (
     <TouchableOpacity
