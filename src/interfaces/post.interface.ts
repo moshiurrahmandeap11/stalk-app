@@ -6,11 +6,14 @@ export interface IPostComment {
   postId: string;
   userId: string;
   userName: string;
+  userUsername?: string | null;
   userProfilePicture?: string | null;
   text: string;
   parentId?: string | null;
   createdAt: string;
   updatedAt?: string;
+  score?: number;
+  userVote?: "up" | "down" | null;
   replies?: IPostComment[];
 }
 

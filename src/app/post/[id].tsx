@@ -117,9 +117,25 @@ export default function PostDetailScreen() {
 
               return (
                 <View key={c.id} style={styles.commentItem}>
-                  <Image source={{ uri: avatar }} style={styles.commentAvatar} contentFit="cover" />
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      const target = c.userUsername || c.userName || c.userId;
+                      if (target) router.push(`/s/${target}` as any);
+                    }}
+                  >
+                    <Image source={{ uri: avatar }} style={styles.commentAvatar} contentFit="cover" />
+                  </TouchableOpacity>
                   <View style={styles.commentBody}>
-                    <Text style={styles.commentAuthor}>{c.userName}</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        const target = c.userUsername || c.userName || c.userId;
+                        if (target) router.push(`/s/${target}` as any);
+                      }}
+                    >
+                      <Text style={styles.commentAuthor}>{c.userName}</Text>
+                    </TouchableOpacity>
                     <Text style={styles.commentText}>{c.text}</Text>
                     <Text style={styles.commentTime}>
                       {new Date(c.createdAt).toLocaleDateString()}

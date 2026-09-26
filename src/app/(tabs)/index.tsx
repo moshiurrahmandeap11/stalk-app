@@ -111,11 +111,6 @@ export default function FeedScreen() {
     enabled: isAuthenticated,
   });
 
-  // If unauthenticated, redirecting to login, render nothing
-  if (!isAuthenticated && !isAuthLoading) {
-    return null;
-  }
-
   // Use fresh query data when loaded, or cached posts instantly while fetching
   const posts: IPost[] = React.useMemo(() => {
     if (data?.pages && data.pages.length > 0) {
@@ -133,6 +128,10 @@ export default function FeedScreen() {
   }, [data, cachedPosts]);
 
   const showInitialLoading = isLoading && posts.length === 0;
+
+  if (!isAuthenticated && !isAuthLoading) {
+    return <View style={styles.safeArea} />;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
