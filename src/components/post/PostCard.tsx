@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Image as RNImage,
 } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
@@ -345,6 +346,25 @@ export const PostCard: React.FC<PostCardProps> = ({
     post.media?.resourceType === "video" ||
     /\.(mp4|mov|webm|m4v)$/i.test(mediaUri);
 
+  // Dynamic image aspect ratio (Facebook style: clamped between 0.75 and 1.91)
+  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (mediaUri && !isVideo) {
+      RNImage.getSize(
+        mediaUri,
+        (w, h) => {
+          if (w > 0 && h > 0) {
+            const rawRatio = w / h;
+            const clamped = Math.max(0.75, Math.min(rawRatio, 1.91));
+            setImageAspectRatio(clamped);
+          }
+        },
+        () => {}
+      );
+    }
+  }, [mediaUri, isVideo]);
+
   const authorName = post.userName || post.user?.fullName || "User";
   const authorHandle = post.username || post.user?.username || authorName.toLowerCase().replace(/\s+/g, "");
   const avatarUri = getMediaUrl(
@@ -433,8 +453,11 @@ export const PostCard: React.FC<PostCardProps> = ({
           />
         ) : (
           <TouchableOpacity
-            style={styles.mediaContainer}
-            activeOpacity={0.9}
+            style={[
+              styles.mediaContainer,
+              { aspectRatio: imageAspectRatio || 1 },
+            ]}
+            activeOpacity={0.95}
             onPress={() => setShowImageViewer(true)}
           >
             <Image
@@ -442,6 +465,14 @@ export const PostCard: React.FC<PostCardProps> = ({
               style={styles.postMedia}
               contentFit="cover"
               transition={200}
+              onLoad={(e) => {
+                const { width, height } = e.source;
+                if (width > 0 && height > 0) {
+                  const rawRatio = width / height;
+                  const clamped = Math.max(0.75, Math.min(rawRatio, 1.91));
+                  setImageAspectRatio(clamped);
+                }
+              }}
             />
           </TouchableOpacity>
         )
@@ -753,8 +784,8 @@ const styles = StyleSheet.create({
   },
   mediaContainer: {
     width: "100%",
-    aspectRatio: 16 / 9,
-    backgroundColor: "#0F172A",
+    backgroundColor: "#F1F5F9",
+    overflow: "hidden",
   },
   postMedia: {
     width: "100%",

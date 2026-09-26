@@ -89,7 +89,7 @@ export default function CreatePostTabScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: mediaType === "images" ? ["images"] : ["videos"],
-      allowsEditing: true,
+      allowsEditing: false,
       quality: 0.85,
     });
 
@@ -110,7 +110,7 @@ export default function CreatePostTabScreen() {
 
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ["images"],
-      allowsEditing: true,
+      allowsEditing: false,
       quality: 0.85,
     });
 
@@ -340,7 +340,17 @@ export default function CreatePostTabScreen() {
 
           {/* Media Preview Box */}
           {media ? (
-            <View style={styles.mediaCard}>
+            <View
+              style={[
+                styles.mediaCard,
+                {
+                  aspectRatio:
+                    media.width && media.height
+                      ? Math.max(0.75, Math.min(media.width / media.height, 1.91))
+                      : 1,
+                },
+              ]}
+            >
               <Image source={{ uri: media.uri }} style={styles.previewImage} contentFit="cover" />
               {media.type === "video" && (
                 <View style={styles.videoBadge}>
@@ -732,7 +742,6 @@ const styles = StyleSheet.create({
   },
   mediaCard: {
     width: "100%",
-    height: 250,
     borderRadius: 16,
     overflow: "hidden",
     position: "relative",
