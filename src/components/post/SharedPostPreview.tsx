@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Image } from "expo-image";
 import { IPost } from "../../interfaces/post.interface";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 interface SharedPostPreviewProps {
   originalPost?: IPost | null;
@@ -16,7 +16,7 @@ export const SharedPostPreview: React.FC<SharedPostPreviewProps> = ({ originalPo
   const authorHandle = originalPost.username || originalPost.user?.username || "user";
   const avatarUri =
     getMediaUrl(originalPost.userProfilePicture || originalPost.user?.profilePicUrl) ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+    DEFAULT_AVATAR;
   const mediaUri = getMediaUrl(originalPost.media?.url || originalPost.mediaUrl);
 
   return (
