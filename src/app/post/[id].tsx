@@ -20,6 +20,7 @@ import { postService } from "../../services/post.service";
 import { PostCard } from "../../components/post/PostCard";
 import { IPostComment } from "../../interfaces/post.interface";
 import { useAuthStore } from "../../store/auth.store";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 export default function PostDetailScreen() {
   const router = useRouter();
@@ -111,8 +112,8 @@ export default function PostDetailScreen() {
 
             {(post.comments || []).map((c: IPostComment) => {
               const avatar =
-                c.userProfilePicture ||
-                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+                getMediaUrl(c.userProfilePicture) ||
+                DEFAULT_AVATAR;
 
               return (
                 <View key={c.id} style={styles.commentItem}>
