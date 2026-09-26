@@ -37,7 +37,7 @@ import {
   Search,
 } from "lucide-react-native";
 import { useAuthStore } from "../../store/auth.store";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 interface FacebookMenuDrawerProps {
   visible: boolean;
@@ -130,11 +130,9 @@ export const FacebookMenuDrawer: React.FC<FacebookMenuDrawerProps> = ({
 
   if (!modalRendered) return null;
 
-  const avatarUri = getMediaUrl(
-    user?.profilePicUrl ||
-    user?.avatar ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-  );
+  const avatarUri =
+    getMediaUrl(user?.profilePicUrl || user?.avatar) ||
+    DEFAULT_AVATAR;
 
   const navigateTo = (path: string) => {
     Haptics.selectionAsync();
