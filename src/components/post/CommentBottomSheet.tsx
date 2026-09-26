@@ -22,6 +22,7 @@ import { postService } from "../../services/post.service";
 import { IPostComment } from "../../interfaces/post.interface";
 import { useAuthStore } from "../../store/auth.store";
 import { useRouter } from "expo-router";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -94,12 +95,13 @@ export const CommentBottomSheet: React.FC<CommentBottomSheetProps> = ({
   };
 
   const userAvatar =
-    user?.profilePicUrl ||
-    user?.avatar ||
-    (typeof (user as any)?.profilePicture === "object"
-      ? (user as any)?.profilePicture?.url
-      : (user as any)?.profilePicture) ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+    getMediaUrl(
+      user?.profilePicUrl ||
+      user?.avatar ||
+      (typeof (user as any)?.profilePicture === "object"
+        ? (user as any)?.profilePicture?.url
+        : (user as any)?.profilePicture)
+    ) || DEFAULT_AVATAR;
 
   return (
     <Modal
@@ -140,8 +142,8 @@ export const CommentBottomSheet: React.FC<CommentBottomSheetProps> = ({
               contentContainerStyle={styles.commentsList}
               renderItem={({ item }) => {
                 const avatarUri =
-                  item.userProfilePicture ||
-                  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+                  getMediaUrl(item.userProfilePicture) ||
+                  DEFAULT_AVATAR;
 
                 return (
                   <View style={styles.commentItem}>
