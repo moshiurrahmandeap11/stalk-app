@@ -12,6 +12,7 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Phone, PhoneOff, Video } from "lucide-react-native";
 import { useCallStore } from "../../store/call.store";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 export const IncomingCallBanner: React.FC = () => {
   const router = useRouter();
@@ -49,8 +50,8 @@ export const IncomingCallBanner: React.FC = () => {
   if (callState !== "incoming" || !partner) return null;
 
   const avatarUri =
-    partner.avatar ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+    getMediaUrl(partner.avatar) ||
+    DEFAULT_AVATAR;
 
   const handleAccept = () => {
     acceptCall();
