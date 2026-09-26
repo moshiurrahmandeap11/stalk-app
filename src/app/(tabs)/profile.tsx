@@ -18,6 +18,12 @@ import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  FadeIn,
+} from "react-native-reanimated";
 import {
   LogOut,
   LogIn,
@@ -54,12 +60,38 @@ import { IPost } from "../../interfaces/post.interface";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_ITEM_SIZE = (SCREEN_WIDTH - 36) / 3;
 
+const PROFILE_TABS = [
+  { key: "posts" as const, icon: FileText, label: "Posts" },
+  { key: "media" as const, icon: Grid, label: "Media" },
+  { key: "saved" as const, icon: Bookmark, label: "Saved" },
+  { key: "about" as const, icon: Info, label: "About" },
+];
+
 export default function ProfileTabScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, isAuthenticated, logout, refreshUser, updateUser } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<"posts" | "media" | "saved" | "about">("posts");
+  const [tabsWidth, setTabsWidth] = useState(SCREEN_WIDTH);
+  const tabTranslateX = useSharedValue(0);
+
+  const switchTab = (tab: "posts" | "media" | "saved" | "about", index: number) => {
+    Haptics.selectionAsync();
+    setActiveTab(tab);
+    const singleTabWidth = tabsWidth / PROFILE_TABS.length;
+    tabTranslateX.value = withSpring(index * singleTabWidth, {
+      damping: 20,
+      stiffness: 240,
+      mass: 0.6,
+    });
+  };
+
+  const singleTabWidth = tabsWidth / PROFILE_TABS.length;
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tabTranslateX.value }],
+    width: singleTabWidth,
+  }));
   const [showEditModal, setShowEditModal] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState(false);
   const [followersModalTab, setFollowersModalTab] = useState<"followers" | "following">("followers");
@@ -461,64 +493,47 @@ export default function ProfileTabScreen() {
           </View>
         </View>
 
-        {/* Web Parity Tabs: Posts / Media / About */}
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === "posts" && styles.tabBtnActive]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setActiveTab("posts");
-            }}
-          >
-            <FileText size={18} color={activeTab === "posts" ? "#3B82F6" : "#64748B"} />
-            <Text style={[styles.tabBtnText, activeTab === "posts" && styles.tabBtnTextActive]}>
-              Posts ({userPosts.length})
-            </Text>
-          </TouchableOpacity>
+        {/* Profile Tabs: Posts / Media / Saved / About (Icon only with fluid sliding indicator) */}
+        <View
+          style={styles.tabsContainer}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width;
+            if (w > 0) {
+              setTabsWidth(w);
+              const idx = PROFILE_TABS.findIndex((t) => t.key === activeTab);
+              tabTranslateX.value = (idx >= 0 ? idx : 0) * (w / PROFILE_TABS.length);
+            }
+          }}
+        >
+          {PROFILE_TABS.map((tab, idx) => {
+            const IconComp = tab.icon;
+            const isActive = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={styles.tabBtn}
+                onPress={() => switchTab(tab.key, idx)}
+                accessibilityLabel={tab.label}
+                activeOpacity={0.7}
+              >
+                <IconComp
+                  size={22}
+                  color={isActive ? "#3B82F6" : "#64748B"}
+                  strokeWidth={isActive ? 2.4 : 1.8}
+                />
+              </TouchableOpacity>
+            );
+          })}
 
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === "media" && styles.tabBtnActive]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setActiveTab("media");
-            }}
-          >
-            <Grid size={17} color={activeTab === "media" ? "#3B82F6" : "#64748B"} />
-            <Text style={[styles.tabBtnText, activeTab === "media" && styles.tabBtnTextActive]}>
-              Media ({mediaPosts.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === "saved" && styles.tabBtnActive]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setActiveTab("saved");
-            }}
-          >
-            <Bookmark size={17} color={activeTab === "saved" ? "#3B82F6" : "#64748B"} />
-            <Text style={[styles.tabBtnText, activeTab === "saved" && styles.tabBtnTextActive]}>
-              Saved ({savedPosts.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === "about" && styles.tabBtnActive]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setActiveTab("about");
-            }}
-          >
-            <Info size={17} color={activeTab === "about" ? "#3B82F6" : "#64748B"} />
-            <Text style={[styles.tabBtnText, activeTab === "about" && styles.tabBtnTextActive]}>
-              About
-            </Text>
-          </TouchableOpacity>
+          {/* Fluid Sliding Active Indicator */}
+          <Animated.View style={[styles.tabIndicatorContainer, indicatorStyle]}>
+            <View style={styles.tabIndicatorPill} />
+          </Animated.View>
         </View>
 
         {/* Tab 1: Posts */}
         {activeTab === "posts" && (
-          <View style={styles.tabContent}>
+          <Animated.View entering={FadeIn.duration(200)} style={styles.tabContent}>
             {loadingPosts ? (
               <View style={styles.loadingBox}>
                 <ActivityIndicator size="small" color="#3B82F6" />
@@ -547,12 +562,12 @@ export default function ProfileTabScreen() {
                 />
               ))
             )}
-          </View>
+          </Animated.View>
         )}
 
         {/* Tab 2: Media Grid */}
         {activeTab === "media" && (
-          <View style={styles.mediaGrid}>
+          <Animated.View entering={FadeIn.duration(200)} style={styles.mediaGrid}>
             {loadingPosts ? (
               <View style={styles.loadingBox}>
                 <ActivityIndicator size="small" color="#3B82F6" />
@@ -595,12 +610,12 @@ export default function ProfileTabScreen() {
                 })}
               </View>
             )}
-          </View>
+          </Animated.View>
         )}
 
         {/* Tab 3: Saved Posts & Reels */}
         {activeTab === "saved" && (
-          <View style={styles.tabContent}>
+          <Animated.View entering={FadeIn.duration(200)} style={styles.tabContent}>
             {loadingSavedPosts ? (
               <View style={styles.loadingBox}>
                 <ActivityIndicator size="small" color="#3B82F6" />
@@ -623,12 +638,12 @@ export default function ProfileTabScreen() {
                 />
               ))
             )}
-          </View>
+          </Animated.View>
         )}
 
         {/* Tab 4: About (Web Feature Parity) */}
         {activeTab === "about" && (
-          <View style={styles.aboutCard}>
+          <Animated.View entering={FadeIn.duration(200)} style={styles.aboutCard}>
             <Text style={styles.aboutCardHeader}>About & Details</Text>
 
             <View style={styles.aboutList}>
@@ -730,7 +745,7 @@ export default function ProfileTabScreen() {
               <Edit3 size={16} color="#3B82F6" />
               <Text style={styles.aboutEditBtnText}>Edit Information</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         )}
       </ScrollView>
 
@@ -1127,28 +1142,32 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E2E8F0",
     marginTop: 8,
+    position: "relative",
   },
   tabBtn: {
     flex: 1,
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
-    paddingVertical: 13,
-    paddingHorizontal: 2,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
+    paddingVertical: 14,
   },
-  tabBtnActive: {
-    borderBottomColor: "#3B82F6",
+  tabIndicatorContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    height: 3,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  tabBtnText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-  tabBtnTextActive: {
-    color: "#3B82F6",
+  tabIndicatorPill: {
+    width: 36,
+    height: 3,
+    backgroundColor: "#3B82F6",
+    borderRadius: 2,
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.35,
+    shadowRadius: 2,
+    elevation: 2,
   },
   tabContent: {
     paddingVertical: 8,
