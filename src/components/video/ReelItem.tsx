@@ -40,7 +40,7 @@ import { followService } from "../../services/follow.service";
 import { useAuthStore } from "../../store/auth.store";
 import { ShareModal } from "../post/ShareModal";
 import { CommentBottomSheet } from "../post/CommentBottomSheet";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 import { updateFeedCacheItem } from "../../utils/feedCache";
 
 const { width: WINDOW_WIDTH } = Dimensions.get("window");
@@ -323,7 +323,7 @@ export const ReelItem: React.FC<ReelItemProps> = ({
   const avatarUri = getMediaUrl(
     post.userProfilePicture ||
     post.user?.profilePicUrl ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
+    DEFAULT_AVATAR
   );
 
   return (
