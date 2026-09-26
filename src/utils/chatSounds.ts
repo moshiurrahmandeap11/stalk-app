@@ -1,6 +1,10 @@
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
-import { Audio, isAudioSupported } from "./safeAudio";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+} from "./safeAudio";
 
 // High-performance lightweight audio chimes for chat & calling
 const SEND_SOUND_URI =
@@ -18,12 +22,12 @@ const DIALING_SOUND_URI =
 const CALL_END_SOUND_URI =
   "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3";
 
-let sendSoundObject: any = null;
-let receiveSoundObject: any = null;
-let reactionSoundObject: any = null;
-let notificationSoundObject: any = null;
-let ringtoneSoundObject: any = null;
-let dialingSoundObject: any = null;
+let sendPlayer: AudioPlayer | null = null;
+let receivePlayer: AudioPlayer | null = null;
+let reactionPlayer: AudioPlayer | null = null;
+let notificationPlayer: AudioPlayer | null = null;
+let ringtonePlayer: AudioPlayer | null = null;
+let dialingPlayer: AudioPlayer | null = null;
 let ringtoneHapticTimer: any = null;
 
 let isAudioConfigured = false;
@@ -37,13 +41,11 @@ export const isChatSoundsEnabled = () => isSoundEnabled;
 
 async function setupAudio() {
   if (isAudioConfigured) return;
-  if (!Audio || !isAudioSupported) return;
-
   try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: true,
-      shouldDuckAndroid: true,
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      interruptionMode: "duckOthers",
     });
     isAudioConfigured = true;
   } catch {
@@ -52,36 +54,23 @@ async function setupAudio() {
 }
 
 /**
- * Preload sound objects in memory so playback triggers with 0ms latency.
+ * Preload sound players in memory so playback triggers with 0ms latency.
  */
 export const preloadChatSounds = async () => {
-  if (!Audio || !isAudioSupported) return;
-
   try {
     await setupAudio();
 
-    if (!sendSoundObject) {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: SEND_SOUND_URI },
-        { volume: 0.6, shouldPlay: false }
-      );
-      sendSoundObject = sound;
+    if (!sendPlayer) {
+      sendPlayer = createAudioPlayer(SEND_SOUND_URI);
+      sendPlayer.volume = 0.6;
     }
-
-    if (!receiveSoundObject) {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: RECEIVE_SOUND_URI },
-        { volume: 0.8, shouldPlay: false }
-      );
-      receiveSoundObject = sound;
+    if (!receivePlayer) {
+      receivePlayer = createAudioPlayer(RECEIVE_SOUND_URI);
+      receivePlayer.volume = 0.8;
     }
-
-    if (!reactionSoundObject) {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: REACTION_SOUND_URI },
-        { volume: 0.5, shouldPlay: false }
-      );
-      reactionSoundObject = sound;
+    if (!reactionPlayer) {
+      reactionPlayer = createAudioPlayer(REACTION_SOUND_URI);
+      reactionPlayer.volume = 0.5;
     }
   } catch {
     // Graceful fallback
@@ -98,18 +87,13 @@ export const playSendSound = async () => {
       return;
     }
 
-    if (!Audio || !isAudioSupported) return;
     await setupAudio();
-
-    if (!sendSoundObject) {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: SEND_SOUND_URI },
-        { volume: 0.6, shouldPlay: true }
-      );
-      sendSoundObject = sound;
-    } else {
-      await sendSoundObject.replayAsync();
+    if (!sendPlayer) {
+      sendPlayer = createAudioPlayer(SEND_SOUND_URI);
+      sendPlayer.volume = 0.6;
     }
+    sendPlayer.seekTo(0).catch(() => {});
+    sendPlayer.play();
   } catch {
     // Graceful fallback
   }
@@ -125,18 +109,13 @@ export const playReceiveSound = async () => {
       return;
     }
 
-    if (!Audio || !isAudioSupported) return;
     await setupAudio();
-
-    if (!receiveSoundObject) {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: RECEIVE_SOUND_URI },
-        { volume: 0.8, shouldPlay: true }
-      );
-      receiveSoundObject = sound;
-    } else {
-      await receiveSoundObject.replayAsync();
+    if (!receivePlayer) {
+      receivePlayer = createAudioPlayer(RECEIVE_SOUND_URI);
+      receivePlayer.volume = 0.8;
     }
+    receivePlayer.seekTo(0).catch(() => {});
+    receivePlayer.play();
   } catch {
     // Graceful fallback
   }
@@ -152,18 +131,13 @@ export const playReactionSound = async () => {
       return;
     }
 
-    if (!Audio || !isAudioSupported) return;
     await setupAudio();
-
-    if (!reactionSoundObject) {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: REACTION_SOUND_URI },
-        { volume: 0.5, shouldPlay: true }
-      );
-      reactionSoundObject = sound;
-    } else {
-      await reactionSoundObject.replayAsync();
+    if (!reactionPlayer) {
+      reactionPlayer = createAudioPlayer(REACTION_SOUND_URI);
+      reactionPlayer.volume = 0.5;
     }
+    reactionPlayer.seekTo(0).catch(() => {});
+    reactionPlayer.play();
   } catch {
     // Graceful fallback
   }
@@ -179,18 +153,13 @@ export const playNotificationSound = async () => {
       return;
     }
 
-    if (!Audio || !isAudioSupported) return;
     await setupAudio();
-
-    if (!notificationSoundObject) {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: NOTIFICATION_SOUND_URI },
-        { volume: 0.85, shouldPlay: true }
-      );
-      notificationSoundObject = sound;
-    } else {
-      await notificationSoundObject.replayAsync();
+    if (!notificationPlayer) {
+      notificationPlayer = createAudioPlayer(NOTIFICATION_SOUND_URI);
+      notificationPlayer.volume = 0.85;
     }
+    notificationPlayer.seekTo(0).catch(() => {});
+    notificationPlayer.play();
   } catch {
     // Graceful fallback
   }
@@ -208,19 +177,14 @@ export const playRingtone = async () => {
     }, 1600);
 
     if (!isSoundEnabled) return;
-    if (Audio && isAudioSupported) {
-      await setupAudio();
-      if (!ringtoneSoundObject) {
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: RINGTONE_SOUND_URI },
-          { volume: 1.0, isLooping: true, shouldPlay: true }
-        );
-        ringtoneSoundObject = sound;
-      } else {
-        await ringtoneSoundObject.setIsLoopingAsync(true);
-        await ringtoneSoundObject.playAsync();
-      }
+    await setupAudio();
+    if (!ringtonePlayer) {
+      ringtonePlayer = createAudioPlayer(RINGTONE_SOUND_URI);
+      ringtonePlayer.loop = true;
+      ringtonePlayer.volume = 1.0;
     }
+    ringtonePlayer.loop = true;
+    ringtonePlayer.play();
   } catch {
     // Non-blocking
   }
@@ -232,13 +196,13 @@ export const stopRingtone = async () => {
       clearInterval(ringtoneHapticTimer);
       ringtoneHapticTimer = null;
     }
-    if (ringtoneSoundObject) {
-      await ringtoneSoundObject.stopAsync();
-      await ringtoneSoundObject.unloadAsync();
-      ringtoneSoundObject = null;
+    if (ringtonePlayer) {
+      ringtonePlayer.pause();
+      ringtonePlayer.remove();
+      ringtonePlayer = null;
     }
   } catch {
-    ringtoneSoundObject = null;
+    ringtonePlayer = null;
   }
 };
 
@@ -248,19 +212,14 @@ export const stopRingtone = async () => {
 export const playDialingTone = async () => {
   try {
     if (!isSoundEnabled) return;
-    if (Audio && isAudioSupported) {
-      await setupAudio();
-      if (!dialingSoundObject) {
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: DIALING_SOUND_URI },
-          { volume: 0.7, isLooping: true, shouldPlay: true }
-        );
-        dialingSoundObject = sound;
-      } else {
-        await dialingSoundObject.setIsLoopingAsync(true);
-        await dialingSoundObject.playAsync();
-      }
+    await setupAudio();
+    if (!dialingPlayer) {
+      dialingPlayer = createAudioPlayer(DIALING_SOUND_URI);
+      dialingPlayer.loop = true;
+      dialingPlayer.volume = 0.7;
     }
+    dialingPlayer.loop = true;
+    dialingPlayer.play();
   } catch {
     // Non-blocking
   }
@@ -268,13 +227,13 @@ export const playDialingTone = async () => {
 
 export const stopDialingTone = async () => {
   try {
-    if (dialingSoundObject) {
-      await dialingSoundObject.stopAsync();
-      await dialingSoundObject.unloadAsync();
-      dialingSoundObject = null;
+    if (dialingPlayer) {
+      dialingPlayer.pause();
+      dialingPlayer.remove();
+      dialingPlayer = null;
     }
   } catch {
-    dialingSoundObject = null;
+    dialingPlayer = null;
   }
 };
 
@@ -285,16 +244,15 @@ export const playCallEndedSound = async () => {
     stopDialingTone();
 
     if (!isSoundEnabled) return;
-    if (Audio && isAudioSupported) {
-      await setupAudio();
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: CALL_END_SOUND_URI },
-        { volume: 0.8, shouldPlay: true }
-      );
-      setTimeout(() => {
-        sound.unloadAsync().catch(() => {});
-      }, 2000);
-    }
+    await setupAudio();
+    const endPlayer = createAudioPlayer(CALL_END_SOUND_URI);
+    endPlayer.volume = 0.8;
+    endPlayer.play();
+    setTimeout(() => {
+      try {
+        endPlayer.remove();
+      } catch {}
+    }, 2500);
   } catch {
     // Non-blocking
   }

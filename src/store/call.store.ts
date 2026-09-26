@@ -3,7 +3,7 @@ import { create } from "zustand";
 import * as Haptics from "expo-haptics";
 import { useSocketStore } from "./socket.store";
 import { useAuthStore } from "./auth.store";
-import { Audio, isAudioSupported } from "../utils/safeAudio";
+import { setAudioModeAsync } from "../utils/safeAudio";
 import {
   playDialingTone,
   stopDialingTone,
@@ -67,18 +67,15 @@ let timerInterval: any = null;
 let timeoutTimer: any = null;
 
 const applyHardwareAudioRouting = async (isSpeaker: boolean) => {
-  if (Audio && isAudioSupported) {
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        playThroughEarpieceAndroid: !isSpeaker,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
-      });
-    } catch {
-      // Non-blocking
-    }
+  try {
+    await setAudioModeAsync({
+      allowsRecording: true,
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      interruptionMode: "duckOthers",
+    });
+  } catch {
+    // Non-blocking
   }
 };
 

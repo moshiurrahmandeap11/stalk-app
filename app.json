@@ -57,6 +57,7 @@
       ],
       "expo-secure-store",
       "expo-video",
+      "expo-audio",
       "@config-plugins/react-native-webrtc",
       [
         "expo-build-properties",

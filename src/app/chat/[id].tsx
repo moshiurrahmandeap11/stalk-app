@@ -38,7 +38,12 @@ import {
   Mic,
   Trash2,
 } from "lucide-react-native";
-import { Audio, isAudioSupported } from "../../utils/safeAudio";
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from "expo-audio";
 import { optimizeImage } from "../../utils/mediaCompressor";
 import { messageService } from "../../services/message.service";
 import { userService } from "../../services/user.service";
@@ -109,7 +114,7 @@ export default function ChatScreen() {
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [recording, setRecording] = useState<any>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -521,27 +526,18 @@ export default function ChatScreen() {
   // Voice Note Recording Handlers
   const startAudioRecording = async () => {
     try {
-      if (!Audio || !isAudioSupported) {
-        Alert.alert(
-          "Audio Not Supported",
-          "Voice recording is available when running with native audio capabilities."
-        );
-        return;
-      }
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
         Alert.alert("Permission Required", "Microphone access is needed to record voice notes.");
         return;
       }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const { recording: newRecording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      setRecording(newRecording);
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
       setIsRecordingAudio(true);
       setRecordDuration(0);
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
@@ -554,33 +550,27 @@ export default function ChatScreen() {
   };
 
   const stopAndSendAudioRecording = async () => {
-    if (!recording) return;
     try {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       setIsRecordingAudio(false);
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
       if (uri) {
         const fileName = `voicenote_${Date.now()}.m4a`;
         await handleSendMedia(uri, "file", fileName);
       }
     } catch {
-      setRecording(null);
       setIsRecordingAudio(false);
     }
   };
 
   const cancelAudioRecording = async () => {
-    if (!recording) return;
     try {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       setIsRecordingAudio(false);
-      await recording.stopAndUnloadAsync();
-      setRecording(null);
+      await audioRecorder.stop();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     } catch {
-      setRecording(null);
       setIsRecordingAudio(false);
     }
   };

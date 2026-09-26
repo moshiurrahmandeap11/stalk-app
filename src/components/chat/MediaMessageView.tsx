@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,10 @@ import {
   Dimensions,
   Modal,
   StatusBar,
-  ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
 import { VideoView, useVideoPlayer } from "expo-video";
-import { Audio, isAudioSupported } from "../../utils/safeAudio";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { FileText, Play, Pause, Mic, X, Download } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -45,76 +44,30 @@ const AudioMessagePlayer: React.FC<{ audioUri: string; isMine: boolean }> = ({
   audioUri,
   isMine,
 }) => {
-  const [sound, setSound] = useState<any>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [positionMillis, setPositionMillis] = useState(0);
-  const [durationMillis, setDurationMillis] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+  const player = useAudioPlayer(audioUri ? { uri: audioUri } : null);
+  const status = useAudioPlayerStatus(player);
 
-  useEffect(() => {
-    return () => {
-      if (sound) {
-        sound.unloadAsync().catch(() => {});
-      }
-    };
-  }, [sound]);
+  const isPlaying = status.playing;
+  const currentTime = status.currentTime || 0;
+  const duration = status.duration || 0;
 
-  const onPlaybackStatusUpdate = (status: any) => {
-    if (status.isLoaded) {
-      setPositionMillis(status.positionMillis || 0);
-      setDurationMillis(status.durationMillis || 0);
-      setIsPlaying(status.isPlaying);
-      if (status.didJustFinish) {
-        setIsPlaying(false);
-        setPositionMillis(0);
-      }
-    }
-  };
-
-  const handleTogglePlay = async () => {
+  const handleTogglePlay = () => {
     try {
       Haptics.selectionAsync();
-      if (!Audio || !isAudioSupported) {
-        if (audioUri) {
-          WebBrowser.openBrowserAsync(audioUri);
-        }
-        return;
-      }
-      if (!sound) {
-        setIsLoading(true);
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          shouldDuckAndroid: true,
-        });
-        const { sound: newSound, status } = await Audio.Sound.createAsync(
-          { uri: audioUri },
-          { shouldPlay: true },
-          onPlaybackStatusUpdate
-        );
-        setSound(newSound);
-        setIsLoading(false);
-        if (status.isLoaded) {
-          setDurationMillis(status.durationMillis || 0);
-        }
+      if (isPlaying) {
+        player.pause();
       } else {
-        if (isPlaying) {
-          await sound.pauseAsync();
-        } else {
-          if (positionMillis >= durationMillis && durationMillis > 0) {
-            await sound.replayAsync();
-          } else {
-            await sound.playAsync();
-          }
+        if (duration > 0 && currentTime >= duration) {
+          player.seekTo(0).catch(() => {});
         }
+        player.play();
       }
     } catch {
-      setIsLoading(false);
-      setIsPlaying(false);
+      // Non-blocking
     }
   };
 
-  const progress = durationMillis > 0 ? positionMillis / durationMillis : 0;
+  const progress = duration > 0 ? currentTime / duration : 0;
   const waveformHeights = [10, 16, 22, 14, 28, 20, 12, 26, 18, 24, 14, 20, 26, 16, 22, 12, 18, 10];
 
   return (
@@ -124,9 +77,7 @@ const AudioMessagePlayer: React.FC<{ audioUri: string; isMine: boolean }> = ({
         activeOpacity={0.8}
         onPress={handleTogglePlay}
       >
-        {isLoading ? (
-          <ActivityIndicator size="small" color={isMine ? "#0A7CFF" : "#FFFFFF"} />
-        ) : isPlaying ? (
+        {isPlaying ? (
           <Pause
             size={18}
             color={isMine ? "#0A7CFF" : "#FFFFFF"}
@@ -170,9 +121,9 @@ const AudioMessagePlayer: React.FC<{ audioUri: string; isMine: boolean }> = ({
         {/* Audio Duration & Timer */}
         <View style={styles.audioMetaRow}>
           <Text style={[styles.audioDurationText, isMine ? styles.textWhiteSub : styles.textGrey]}>
-            {isPlaying || positionMillis > 0
-              ? `${formatAudioTime(positionMillis)} / ${formatAudioTime(durationMillis)}`
-              : formatAudioTime(durationMillis) || "Voice note"}
+            {isPlaying || currentTime > 0
+              ? `${formatAudioTime(currentTime * 1000)} / ${formatAudioTime(duration * 1000)}`
+              : formatAudioTime(duration * 1000) || "Voice note"}
           </Text>
           <Mic size={12} color={isMine ? "rgba(255, 255, 255, 0.7)" : "#94A3B8"} />
         </View>
