@@ -15,7 +15,7 @@ import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { X, MessageCircle, ArrowUp } from "lucide-react-native";
 import { IPost } from "../../interfaces/post.interface";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -41,11 +41,9 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
 
   const authorName = post.userName || post.user?.fullName || "User";
   const authorHandle = post.username || post.user?.username || authorName.toLowerCase().replace(/\s+/g, "");
-  const avatarUri = getMediaUrl(
-    post.userProfilePicture ||
-      post.user?.profilePicUrl ||
-      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-  );
+  const avatarUri =
+    getMediaUrl(post.userProfilePicture || post.user?.profilePicUrl) ||
+    DEFAULT_AVATAR;
 
   const toggleControls = () => {
     setShowControls((prev) => !prev);
