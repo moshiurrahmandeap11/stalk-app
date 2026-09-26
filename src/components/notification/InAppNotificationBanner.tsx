@@ -22,7 +22,7 @@ import { Bell, MessageSquare, Heart, UserPlus } from "lucide-react-native";
 import { useSocketStore } from "../../store/socket.store";
 import { useAuthStore } from "../../store/auth.store";
 import { playNotificationSound } from "../../utils/chatSounds";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 interface NotificationItem {
   id?: string;
@@ -132,10 +132,9 @@ export const InAppNotificationBanner: React.FC = () => {
   if (!notification) return null;
 
   const actor = notification.actor;
-  const avatarUri = getMediaUrl(
-    actor?.profilePicUrl ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-  );
+  const avatarUri =
+    getMediaUrl(actor?.profilePicUrl) ||
+    DEFAULT_AVATAR;
 
   const handlePress = () => {
     Haptics.selectionAsync();
