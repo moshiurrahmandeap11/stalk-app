@@ -39,7 +39,7 @@ import { postService } from "../../services/post.service";
 import { useAuthStore } from "../../store/auth.store";
 import { PostCard } from "../../components/post/PostCard";
 import { FollowersModal } from "../../components/profile/FollowersModal";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR, DEFAULT_COVER } from "../../utils/media";
 import { IPost } from "../../interfaces/post.interface";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -203,17 +203,11 @@ export default function UserProfileScreen() {
     );
   }
 
-  const avatarUri = getMediaUrl(
-    user.avatar ||
-    user.profilePicUrl ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-  );
+  const avatarUri =
+    getMediaUrl(user.avatar || user.profilePicUrl) || DEFAULT_AVATAR;
 
-  const coverUri = getMediaUrl(
-    user.coverImage ||
-    user.coverPhotoUrl ||
-    "https://images.unsplash.com/photo-1707343843437-caacff5cfa74?w=800"
-  );
+  const coverUri =
+    getMediaUrl(user.coverImage || user.coverPhotoUrl) || DEFAULT_COVER;
 
   return (
     <View style={styles.container}>
