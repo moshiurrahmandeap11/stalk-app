@@ -18,6 +18,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useCallStore } from "../../store/call.store";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -63,8 +64,8 @@ export function OngoingCallBar() {
   };
 
   const avatarUri =
-    partner?.avatar ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+    getMediaUrl(partner?.avatar) ||
+    DEFAULT_AVATAR;
 
   return (
     <View style={[styles.container, { top: insets.top + (Platform.OS === "android" ? 4 : 0) }]}>
