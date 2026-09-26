@@ -20,7 +20,7 @@ import { X, Camera, Check, MapPin, Globe, Calendar, User, AlignLeft } from "luci
 import { IUser } from "../../interfaces/user.interface";
 import { userService } from "../../services/user.service";
 import { useAuthStore } from "../../store/auth.store";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR, DEFAULT_COVER } from "../../utils/media";
 
 interface EditProfileModalProps {
   visible: boolean;
@@ -66,17 +66,15 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     }
   }, [visible, user]);
 
-  const currentAvatar = avatarUri || getMediaUrl(
-    user.profilePicUrl ||
-    user.avatar ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-  );
+  const currentAvatar =
+    avatarUri ||
+    getMediaUrl(user.profilePicUrl || user.avatar) ||
+    DEFAULT_AVATAR;
 
-  const currentCover = coverUri || getMediaUrl(
-    user.coverPhotoUrl ||
-    user.coverImage ||
-    "https://images.unsplash.com/photo-1707343843437-caacff5cfa74?w=800"
-  );
+  const currentCover =
+    coverUri ||
+    getMediaUrl(user.coverPhotoUrl || user.coverImage) ||
+    DEFAULT_COVER;
 
   const handlePickAvatar = async () => {
     try {
