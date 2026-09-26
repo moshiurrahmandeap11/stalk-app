@@ -22,6 +22,7 @@ import { useChatHeadStore } from "../store/chathead.store";
 import { FacebookActionSheet } from "../components/ui/FacebookActionSheet";
 import { playReceiveSound, setChatSoundsEnabled, isChatSoundsEnabled } from "../utils/chatSounds";
 import { CreateGroupModal } from "../components/chat/CreateGroupModal";
+import { DEFAULT_AVATAR, DEFAULT_GROUP_AVATAR, getMediaUrl } from "../utils/media";
 
 export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = {}) {
   const router = useRouter();
@@ -158,10 +159,9 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
             const title = isGroup
               ? item.name || "Group Chat"
               : otherParticipant?.userName || "Chat";
-            const avatar =
-              item.avatar ||
-              otherParticipant?.userProfilePicture ||
-              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+            const avatar = isGroup
+              ? (item.avatar ? getMediaUrl(item.avatar) : DEFAULT_GROUP_AVATAR)
+              : (getMediaUrl(item.avatar || otherParticipant?.userProfilePicture) || DEFAULT_AVATAR);
 
             const unread = otherParticipant?.unreadCount || item.unreadCount || 0;
             const targetId = isGroup ? item.id : otherParticipant?.userId || item.id;
