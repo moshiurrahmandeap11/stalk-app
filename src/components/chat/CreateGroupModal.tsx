@@ -28,6 +28,7 @@ import { useQuery } from "@tanstack/react-query";
 import { friendService, IFriendUser } from "../../services/friend.service";
 import { messageService } from "../../services/message.service";
 import { searchService } from "../../services/search.service";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 import { IConversation } from "../../interfaces/message.interface";
 
 interface CreateGroupModalProps {
@@ -203,9 +204,10 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
                 contentContainerStyle={styles.chipsList}
                 renderItem={({ item }) => {
                   const avatarUri =
-                    item.profilePicUrl ||
-                    (typeof item.profilePicture === "object" ? item.profilePicture?.url : "") ||
-                    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+                    getMediaUrl(
+                      item.profilePicUrl ||
+                      (typeof item.profilePicture === "object" ? item.profilePicture?.url : "")
+                    ) || DEFAULT_AVATAR;
                   return (
                     <View style={styles.userChip}>
                       <Image source={{ uri: avatarUri }} style={styles.chipAvatar} contentFit="cover" />
@@ -255,9 +257,10 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
               renderItem={({ item }) => {
                 const isSelected = selectedUsers.some((u) => u.id === item.id);
                 const avatarUri =
-                  item.profilePicUrl ||
-                  (typeof item.profilePicture === "object" ? item.profilePicture?.url : "") ||
-                  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+                  getMediaUrl(
+                    item.profilePicUrl ||
+                    (typeof item.profilePicture === "object" ? item.profilePicture?.url : "")
+                  ) || DEFAULT_AVATAR;
 
                 return (
                   <TouchableOpacity
