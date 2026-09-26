@@ -31,6 +31,7 @@ import {
 } from "lucide-react-native";
 import { useCallStore } from "../store/call.store";
 import { RTCView, isWebRTCSupported } from "../services/webrtc.service";
+import { getMediaUrl, DEFAULT_AVATAR } from "../utils/media";
 
 const { width } = Dimensions.get("window");
 
@@ -111,8 +112,8 @@ export default function CallScreen() {
   }));
 
   const avatarUri =
-    partner?.avatar ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300";
+    getMediaUrl(partner?.avatar) ||
+    DEFAULT_AVATAR;
 
   const getStatusText = () => {
     switch (callState) {
