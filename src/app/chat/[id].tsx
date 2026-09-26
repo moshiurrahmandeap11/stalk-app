@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -54,8 +56,12 @@ import {
   playReactionSound,
   preloadChatSounds,
 } from "../../utils/chatSounds";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR, DEFAULT_GROUP_AVATAR } from "../../utils/media";
 import * as Clipboard from "expo-clipboard";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface IParsedReply {
   replyId: string;
@@ -110,14 +116,6 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const [navBarInset, setNavBarInset] = useState(insets.bottom || 24);
-
-  // Preserve the actual navigation bar inset when keyboard is closed
-  useEffect(() => {
-    if (!isKeyboardVisible && insets.bottom > 0) {
-      setNavBarInset(insets.bottom);
-    }
-  }, [insets.bottom, isKeyboardVisible]);
 
   useEffect(() => {
     preloadChatSounds();
@@ -130,6 +128,9 @@ export default function ChatScreen() {
       if (h > 0) {
         setKeyboardHeight(h);
       }
+      try {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      } catch {}
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 60);
@@ -137,6 +138,9 @@ export default function ChatScreen() {
     const onHide = () => {
       setIsKeyboardVisible(false);
       setKeyboardHeight(0);
+      try {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      } catch {}
     };
 
     const showSub1 = Keyboard.addListener("keyboardDidShow", onShow);
@@ -375,24 +379,47 @@ export default function ChatScreen() {
       // Upload to server
       const uploadRes = await messageService.uploadMedia(formData);
 
+      const resolvedMsgType =
+        uploadRes.fileType === "document" || (uploadRes.fileType as string) === "file"
+          ? "file"
+          : uploadRes.fileType || fileType;
+      const resolvedMediaUrl = uploadRes.mediaUrl || uri;
+      const resolvedFileName = uploadRes.fileName || fileName;
+      const resolvedFileSize = uploadRes.fileSize || 0;
+
+      // Update optimistic preview with real server url & metadata
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.tempId === tempId
+            ? {
+                ...m,
+                mediaUrl: resolvedMediaUrl,
+                messageType: resolvedMsgType,
+                fileName: resolvedFileName,
+                fileSize: resolvedFileSize,
+              }
+            : m
+        )
+      );
+
       // Send message via socket or REST
       if (socket?.connected) {
         socket.emit("send_message", {
           receiverId: id,
           message: "",
-          messageType: uploadRes.fileType === "document" ? "file" : uploadRes.fileType,
-          mediaUrl: uploadRes.mediaUrl,
-          fileName: uploadRes.fileName,
-          fileSize: uploadRes.fileSize,
+          messageType: resolvedMsgType,
+          mediaUrl: resolvedMediaUrl,
+          fileName: resolvedFileName,
+          fileSize: resolvedFileSize,
           tempId,
         });
       } else {
         const saved = await messageService.sendMessage(id!, {
           message: "",
-          messageType: uploadRes.fileType === "document" ? "file" : uploadRes.fileType,
-          mediaUrl: uploadRes.mediaUrl,
-          fileName: uploadRes.fileName,
-          fileSize: uploadRes.fileSize,
+          messageType: resolvedMsgType,
+          mediaUrl: resolvedMediaUrl,
+          fileName: resolvedFileName,
+          fileSize: resolvedFileSize,
           tempId,
         });
         setMessages((prev) => prev.map((m) => (m.tempId === tempId ? saved : m)));
@@ -558,8 +585,8 @@ export default function ChatScreen() {
   const isOnline = onlineUsers.includes(id || "");
   const chatTitle = isGroup ? currentConv?.name || "Group Chat" : targetUser?.fullName || "Chat";
   const avatarUri = isGroup
-    ? currentConv?.avatar || "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150"
-    : getMediaUrl(targetUser?.avatar || targetUser?.profilePicUrl);
+    ? (currentConv?.avatar ? getMediaUrl(currentConv.avatar) : DEFAULT_GROUP_AVATAR)
+    : (getMediaUrl(targetUser?.avatar || targetUser?.profilePicUrl) || DEFAULT_AVATAR);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -580,7 +607,7 @@ export default function ChatScreen() {
         >
           <View style={styles.avatarWrapper}>
             <Image
-              source={{ uri: avatarUri || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" }}
+              source={{ uri: avatarUri || DEFAULT_AVATAR }}
               style={styles.headerAvatar}
               contentFit="cover"
             />
@@ -796,7 +823,7 @@ export default function ChatScreen() {
                         <Text style={styles.callBackText}>Call Back</Text>
                       </TouchableOpacity>
                     </View>
-                  ) : item.messageType && item.messageType !== "text" ? (
+                  ) : (item.messageType && item.messageType !== "text") || Boolean(item.mediaUrl) ? (
                     <MediaMessageView message={item} isMine={isMine} />
                   ) : null}
 
@@ -809,6 +836,7 @@ export default function ChatScreen() {
                       style={[
                         styles.bubbleText,
                         isMine ? styles.myBubbleText : styles.theirBubbleText,
+                        Boolean(item.mediaUrl) && { marginTop: 6 },
                       ]}
                     >
                       {text}
@@ -837,7 +865,7 @@ export default function ChatScreen() {
                             uri:
                               getMediaUrl(item.senderProfilePicture) ||
                               avatarUri ||
-                              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
+                              DEFAULT_AVATAR,
                           }}
                           style={styles.senderAvatar}
                           contentFit="cover"
@@ -869,6 +897,7 @@ export default function ChatScreen() {
                             style={[
                               styles.bubble,
                               styles.myBubble,
+                              (item.messageType === "image" || item.messageType === "video") && !text && styles.mediaBubble,
                               dynamicBorderRadius,
                               isHighlighted && styles.highlightedBubble,
                             ]}
@@ -880,6 +909,7 @@ export default function ChatScreen() {
                             style={[
                               styles.bubble,
                               styles.theirBubble,
+                              (item.messageType === "image" || item.messageType === "video") && !text && styles.mediaBubble,
                               dynamicBorderRadius,
                               isHighlighted && styles.highlightedBubble,
                             ]}
@@ -918,7 +948,7 @@ export default function ChatScreen() {
                               source={{
                                 uri:
                                   avatarUri ||
-                                  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
+                                  DEFAULT_AVATAR,
                               }}
                               style={styles.seenMiniAvatar}
                               contentFit="cover"
@@ -943,11 +973,10 @@ export default function ChatScreen() {
         {/* Input & Typing Container with Dynamic Keyboard Pinning */}
         <View
           style={{
-            paddingBottom: keyboardHeight > 0
-              ? keyboardHeight + (Platform.OS === "android" ? Math.max(navBarInset, 46) + 8 : 8)
-              : isKeyboardVisible
-              ? 280 + (Platform.OS === "android" ? Math.max(navBarInset, 46) + 8 : 8)
-              : Math.max(insets.bottom, 8),
+            paddingBottom:
+              keyboardHeight > 0 || isKeyboardVisible
+                ? (keyboardHeight > 0 ? keyboardHeight : 280) + insets.bottom
+                : Math.max(insets.bottom, 8),
           }}
         >
           {/* Real-time Messenger Typing Indicator */}
@@ -1218,6 +1247,11 @@ const styles = StyleSheet.create({
   theirBubble: {
     backgroundColor: "#E4E6EB",
     borderBottomLeftRadius: 4,
+  },
+  mediaBubble: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    backgroundColor: "transparent",
   },
   highlightedBubble: {
     borderWidth: 2,
