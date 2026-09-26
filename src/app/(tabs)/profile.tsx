@@ -38,6 +38,7 @@ import {
   Camera,
   Eye,
   X,
+  Bookmark,
 } from "lucide-react-native";
 import { useAuthStore } from "../../store/auth.store";
 import { postService } from "../../services/post.service";
@@ -58,7 +59,7 @@ export default function ProfileTabScreen() {
   const queryClient = useQueryClient();
   const { user, isAuthenticated, logout, refreshUser, updateUser } = useAuthStore();
 
-  const [activeTab, setActiveTab] = useState<"posts" | "media" | "about">("posts");
+  const [activeTab, setActiveTab] = useState<"posts" | "media" | "saved" | "about">("posts");
   const [showEditModal, setShowEditModal] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState(false);
   const [followersModalTab, setFollowersModalTab] = useState<"followers" | "following">("followers");
@@ -83,6 +84,19 @@ export default function ProfileTabScreen() {
     queryFn: () => (userId ? postService.getUserPosts(userId) : Promise.resolve([])),
     enabled: Boolean(isAuthenticated && userId),
   });
+
+  // Fetch Saved Posts
+  const {
+    data: savedPostsData,
+    isLoading: loadingSavedPosts,
+    refetch: refetchSavedPosts,
+  } = useQuery({
+    queryKey: ["savedPosts"],
+    queryFn: () => postService.getSavedPosts(1, 50),
+    enabled: Boolean(isAuthenticated),
+  });
+
+  const savedPosts = savedPostsData?.data || [];
 
   // Fetch Followers Count
   const { data: followersCount = user?.followersCount ?? 0, refetch: refetchFollowers } = useQuery<number>({
@@ -109,9 +123,11 @@ export default function ProfileTabScreen() {
       await Promise.all([
         refreshUser(),
         refetchPosts(),
+        refetchSavedPosts(),
         refetchFollowers(),
         refetchFollowing(),
         queryClient.invalidateQueries({ queryKey: ["userPosts", userId] }),
+        queryClient.invalidateQueries({ queryKey: ["savedPosts"] }),
       ]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
@@ -119,7 +135,7 @@ export default function ProfileTabScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [refreshUser, refetchPosts, refetchFollowers, refetchFollowing, queryClient, userId]);
+  }, [refreshUser, refetchPosts, refetchSavedPosts, refetchFollowers, refetchFollowing, queryClient, userId]);
 
   const handlePickNewAvatar = async () => {
     try {
@@ -473,9 +489,22 @@ export default function ProfileTabScreen() {
               setActiveTab("media");
             }}
           >
-            <Grid size={18} color={activeTab === "media" ? "#3B82F6" : "#64748B"} />
+            <Grid size={17} color={activeTab === "media" ? "#3B82F6" : "#64748B"} />
             <Text style={[styles.tabBtnText, activeTab === "media" && styles.tabBtnTextActive]}>
               Media ({mediaPosts.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === "saved" && styles.tabBtnActive]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setActiveTab("saved");
+            }}
+          >
+            <Bookmark size={17} color={activeTab === "saved" ? "#3B82F6" : "#64748B"} />
+            <Text style={[styles.tabBtnText, activeTab === "saved" && styles.tabBtnTextActive]}>
+              Saved ({savedPosts.length})
             </Text>
           </TouchableOpacity>
 
@@ -486,7 +515,7 @@ export default function ProfileTabScreen() {
               setActiveTab("about");
             }}
           >
-            <Info size={18} color={activeTab === "about" ? "#3B82F6" : "#64748B"} />
+            <Info size={17} color={activeTab === "about" ? "#3B82F6" : "#64748B"} />
             <Text style={[styles.tabBtnText, activeTab === "about" && styles.tabBtnTextActive]}>
               About
             </Text>
@@ -575,7 +604,35 @@ export default function ProfileTabScreen() {
           </View>
         )}
 
-        {/* Tab 3: About (Web Feature Parity) */}
+        {/* Tab 3: Saved Posts & Reels */}
+        {activeTab === "saved" && (
+          <View style={styles.tabContent}>
+            {loadingSavedPosts ? (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="small" color="#3B82F6" />
+                <Text style={styles.loadingBoxText}>Loading saved items...</Text>
+              </View>
+            ) : savedPosts.length === 0 ? (
+              <View style={styles.emptyTabBox}>
+                <Bookmark size={40} color="#CBD5E1" />
+                <Text style={styles.emptyTabTitle}>No saved posts yet</Text>
+                <Text style={styles.emptyTabSubtitle}>
+                  Posts, reels, and videos you save will appear here for easy access.
+                </Text>
+              </View>
+            ) : (
+              savedPosts.map((post) => (
+                <PostCard
+                  key={post.id || (post as any)._id}
+                  post={post}
+                  onPostDeleted={() => refetchSavedPosts()}
+                />
+              ))
+            )}
+          </View>
+        )}
+
+        {/* Tab 4: About (Web Feature Parity) */}
         {activeTab === "about" && (
           <View style={styles.aboutCard}>
             <Text style={styles.aboutCardHeader}>About & Details</Text>
@@ -1082,8 +1139,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 14,
+    gap: 4,
+    paddingVertical: 13,
+    paddingHorizontal: 2,
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
   },
@@ -1091,7 +1149,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#3B82F6",
   },
   tabBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: "#64748B",
   },

@@ -46,6 +46,9 @@ export interface IPost {
   isShare?: boolean;
   isRepost?: boolean;
   originalPost?: IPost | null;
+  isSaved?: boolean;
+  isSavedByCurrentUser?: boolean;
+  savedAt?: string;
   createdAt: string;
   updatedAt?: string;
 }

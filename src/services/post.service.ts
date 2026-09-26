@@ -36,9 +36,16 @@ export const postService = {
     return res.data.data;
   },
 
-  async savePost(postId: string): Promise<any> {
-    const res = await apiClient.post(`/posts/${postId}/save`);
+  async savePost(postId: string): Promise<{ isSaved: boolean }> {
+    const res = await apiClient.post<{ success: boolean; data: { isSaved: boolean } }>(`/posts/${postId}/save`);
     return res.data.data;
+  },
+
+  async getSavedPosts(page = 1, limit = 10): Promise<{ data: IPost[]; meta: { total: number; page: number } }> {
+    const res = await apiClient.get<{ success: boolean; data: IPost[]; meta: { total: number; page: number } }>(
+      `/posts/saved?page=${page}&limit=${limit}`
+    );
+    return { data: res.data.data, meta: res.data.meta };
   },
 
   async deletePost(postId: string): Promise<any> {

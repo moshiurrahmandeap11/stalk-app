@@ -98,6 +98,10 @@ export const PostCard: React.FC<PostCardProps> = ({
     post.likesCount ?? (post.likes ? post.likes.length : 0)
   );
 
+  // Saved state
+  const initialSaved = Boolean(post.isSaved || (post as any).isSavedByCurrentUser);
+  const [isSaved, setIsSaved] = useState(initialSaved);
+
   // Comments state
   const [showCommentSheet, setShowCommentSheet] = useState(false);
   const [commentCount, setCommentCount] = useState(
@@ -125,7 +129,34 @@ export const PostCard: React.FC<PostCardProps> = ({
     setIsUpvoted(liked);
     setLikesCount(post.likesCount ?? (post.likes ? post.likes.length : 0));
     setCommentCount(post.commentsCount ?? (post.comments ? post.comments.length : 0));
-  }, [post.likes, post.likesCount, post.isLikedByCurrentUser, post.commentsCount, currentUserId]);
+    setIsSaved(Boolean(post.isSaved || (post as any).isSavedByCurrentUser));
+  }, [post.likes, post.likesCount, post.isLikedByCurrentUser, post.commentsCount, post.isSaved, (post as any).isSavedByCurrentUser, currentUserId]);
+
+  const handleToggleSave = async () => {
+    if (!isAuthenticated) {
+      Alert.alert("Sign In Required", "Please sign in to save posts.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign In", onPress: () => router.push("/login" as any) },
+      ]);
+      return;
+    }
+    const nextSaved = !isSaved;
+    setIsSaved(nextSaved);
+    Haptics.notificationAsync(
+      nextSaved ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning
+    );
+
+    try {
+      const res = await postService.savePost(postId);
+      if (res && typeof res.isSaved === "boolean") {
+        setIsSaved(res.isSaved);
+      }
+      queryClient.invalidateQueries({ queryKey: ["savedPosts"] });
+    } catch {
+      setIsSaved(!nextSaved);
+      Alert.alert("Error", "Could not update saved status.");
+    }
+  };
 
   // Animations
   const upvoteScale = useSharedValue(1);
@@ -604,7 +635,9 @@ export const PostCard: React.FC<PostCardProps> = ({
           post={post}
           isLiked={isUpvoted}
           likesCount={likesCount}
+          isSaved={isSaved}
           onPressLike={handleUpvote}
+          onPressSave={handleToggleSave}
           onPressComment={() => setShowCommentSheet(true)}
           onClose={() => setShowReelModal(false)}
         />
@@ -616,9 +649,14 @@ export const PostCard: React.FC<PostCardProps> = ({
         title="Post Options"
         actions={[
           {
+            id: "save",
+            label: isSaved ? "Unsave Post" : "Save Post",
+            icon: Bookmark,
+            onPress: handleToggleSave,
+          },
+          {
             id: "copy",
             label: "Copy Link",
-            subLabel: "Copy link to clipboard",
             icon: Copy,
             onPress: async () => {
               await Clipboard.setStringAsync(`https://stalk.com/post/details/${postId}`);
@@ -630,7 +668,6 @@ export const PostCard: React.FC<PostCardProps> = ({
                 {
                   id: "delete",
                   label: "Delete Post",
-                  subLabel: "Move this post to trash",
                   icon: Trash2,
                   destructive: true,
                   onPress: () => {
@@ -640,18 +677,8 @@ export const PostCard: React.FC<PostCardProps> = ({
               ]
             : [
                 {
-                  id: "bookmark",
-                  label: "Save Post",
-                  subLabel: "Add this to your saved items",
-                  icon: Bookmark,
-                  onPress: () => {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  },
-                },
-                {
                   id: "hide",
                   label: "Hide Post",
-                  subLabel: "See fewer posts like this",
                   icon: EyeOff,
                   onPress: () => {
                     Haptics.selectionAsync();

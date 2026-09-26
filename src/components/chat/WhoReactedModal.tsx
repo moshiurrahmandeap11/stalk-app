@@ -3,15 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   FlatList,
-  Pressable,
 } from "react-native";
 import { Image } from "expo-image";
-import { X } from "lucide-react-native";
 import { IMessageReaction } from "../../interfaces/message.interface";
 import { getMediaUrl } from "../../utils/media";
+import { AppBottomSheetModal } from "../ui/AppBottomSheetModal";
 
 interface WhoReactedModalProps {
   visible: boolean;
@@ -27,8 +25,6 @@ export const WhoReactedModal: React.FC<WhoReactedModalProps> = ({
   onSelectUser,
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<string>("all");
-
-  if (!visible) return null;
 
   // Group unique emojis and their counts
   const emojiCounts: { [emoji: string]: number } = {};
@@ -50,24 +46,15 @@ export const WhoReactedModal: React.FC<WhoReactedModalProps> = ({
       : reactions.filter((r) => r.reaction === selectedFilter);
 
   return (
-    <Modal
+    <AppBottomSheetModal
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      title="Reactions"
+      showCloseButton={true}
+      showHandle={true}
+      transparentBackdrop={true}
+      maxHeight="75%"
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheetContainer} onPress={(e) => e.stopPropagation()}>
-          {/* Grabber Handle */}
-          <View style={styles.handleBar} />
-
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Reactions</Text>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
-              <X size={18} color="#64748B" />
-            </TouchableOpacity>
-          </View>
 
           {/* Filter Tabs */}
           <View style={styles.tabsRow}>
@@ -121,62 +108,11 @@ export const WhoReactedModal: React.FC<WhoReactedModalProps> = ({
               );
             }}
           />
-        </Pressable>
-      </Pressable>
-    </Modal>
+    </AppBottomSheetModal>
   );
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    justifyContent: "flex-end",
-  },
-  sheetContainer: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "65%",
-    minHeight: 300,
-    paddingBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 20,
-  },
-  handleBar: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#CBD5E1",
-    alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  closeBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#F1F5F9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
   tabsRow: {
     flexDirection: "row",
     paddingHorizontal: 16,

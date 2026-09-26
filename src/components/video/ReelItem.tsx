@@ -82,7 +82,9 @@ export const ReelItem: React.FC<ReelItemProps> = ({
   const [showShareModal, setShowShareModal] = useState(false);
   const [showCommentSheet, setShowCommentSheet] = useState(false);
   const [sharesCount, setSharesCount] = useState(post.sharesCount ?? 0);
-  const [isSaved, setIsSaved] = useState(false);
+  const [isSaved, setIsSaved] = useState(
+    Boolean(post.isSaved || (post as any).isSavedByCurrentUser)
+  );
   const [showHeartAnim, setShowHeartAnim] = useState(false);
 
   // Upvote / Likes state
@@ -110,7 +112,8 @@ export const ReelItem: React.FC<ReelItemProps> = ({
     setIsLiked(liked);
     setLikesCount(post.likesCount ?? (post.likes ? post.likes.length : 0));
     setCommentCount(post.commentsCount ?? (post.comments ? post.comments.length : 0));
-  }, [post.likes, post.likesCount, post.isLikedByCurrentUser, post.commentsCount, currentUserId]);
+    setIsSaved(Boolean(post.isSaved || (post as any).isSavedByCurrentUser));
+  }, [post.likes, post.likesCount, post.isLikedByCurrentUser, post.commentsCount, post.isSaved, (post as any).isSavedByCurrentUser, currentUserId]);
 
   // Animations
   const likeScale = useSharedValue(1);
@@ -288,11 +291,16 @@ export const ReelItem: React.FC<ReelItemProps> = ({
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsSaved(!isSaved);
+    const nextSaved = !isSaved;
+    setIsSaved(nextSaved);
     try {
-      await postService.savePost(postId);
+      const res = await postService.savePost(postId);
+      if (res && typeof res.isSaved === "boolean") {
+        setIsSaved(res.isSaved);
+      }
+      queryClient.invalidateQueries({ queryKey: ["savedPosts"] });
     } catch {
-      setIsSaved(isSaved);
+      setIsSaved(!nextSaved);
     }
   };
 

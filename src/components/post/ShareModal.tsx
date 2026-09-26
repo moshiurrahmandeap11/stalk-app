@@ -3,18 +3,17 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   TextInput,
   Share,
   ActivityIndicator,
-  TouchableWithoutFeedback,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
-import { Send, Link2, Share2, Check, X } from "lucide-react-native";
+import { Send, Link2, Share2, Check } from "lucide-react-native";
 import { IPost } from "../../interfaces/post.interface";
 import { postService } from "../../services/post.service";
+import { AppBottomSheetModal } from "../ui/AppBottomSheetModal";
 
 interface ShareModalProps {
   visible: boolean;
@@ -76,164 +75,104 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   };
 
   return (
-    <Modal
+    <AppBottomSheetModal
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      title="Share Post"
+      showCloseButton={true}
+      showHandle={true}
+      transparentBackdrop={true}
+      avoidKeyboard={true}
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View style={styles.sheet}>
-              {/* Drag Handle */}
-              <View style={styles.handle} />
-
-              {/* Header */}
-              <View style={styles.header}>
-                <Text style={styles.title}>Share Post</Text>
-                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                  <X size={20} color="#64748B" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Feed Share Composer (if expanded) */}
-              {showFeedInput ? (
-                <View style={styles.composerBox}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Say something about this post..."
-                    placeholderTextColor="#94A3B8"
-                    value={description}
-                    onChangeText={setDescription}
-                    multiline
-                    autoFocus
-                  />
-                  <View style={styles.composerActions}>
-                    <TouchableOpacity
-                      style={styles.cancelBtn}
-                      onPress={() => setShowFeedInput(false)}
-                    >
-                      <Text style={styles.cancelBtnText}>Back</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.submitBtn}
-                      onPress={handleShareToFeed}
-                      disabled={isSharing}
-                    >
-                      {isSharing ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
-                      ) : (
-                        <Text style={styles.submitBtnText}>Share to Feed</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
+      {/* Feed Share Composer (if expanded) */}
+      {showFeedInput ? (
+        <View style={styles.composerBox}>
+          <TextInput
+            style={styles.input}
+            placeholder="Say something about this post..."
+            placeholderTextColor="#94A3B8"
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            autoFocus
+          />
+          <View style={styles.composerActions}>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setShowFeedInput(false)}
+            >
+              <Text style={styles.cancelBtnText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.submitBtn}
+              onPress={handleShareToFeed}
+              disabled={isSharing}
+            >
+              {isSharing ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                /* Action Items */
-                <View style={styles.actionsList}>
-                  {/* Share to Feed */}
-                  <TouchableOpacity
-                    style={styles.actionItem}
-                    onPress={() => setShowFeedInput(true)}
-                  >
-                    <View style={[styles.iconCircle, { backgroundColor: "#EFF6FF" }]}>
-                      <Send size={22} color="#2563EB" />
-                    </View>
-                    <View style={styles.actionTextContainer}>
-                      <Text style={styles.actionTitle}>Share to Your Feed</Text>
-                      <Text style={styles.actionSubtitle}>Repost to your followers</Text>
-                    </View>
-                  </TouchableOpacity>
+                <Text style={styles.submitBtnText}>Share to Feed</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        /* Action Items */
+        <View style={styles.actionsList}>
+          {/* Share to Feed */}
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => setShowFeedInput(true)}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: "#EFF6FF" }]}>
+              <Send size={20} color="#2563EB" />
+            </View>
+            <View style={styles.actionTextContainer}>
+              <Text style={styles.actionTitle}>Share to Your Feed</Text>
+            </View>
+          </TouchableOpacity>
 
-                  {/* Copy Link */}
-                  <TouchableOpacity
-                    style={styles.actionItem}
-                    onPress={handleCopyLink}
-                  >
-                    <View style={[styles.iconCircle, { backgroundColor: isCopied ? "#DCFCE7" : "#F1F5F9" }]}>
-                      {isCopied ? (
-                        <Check size={22} color="#16A34A" />
-                      ) : (
-                        <Link2 size={22} color="#0F172A" />
-                      )}
-                    </View>
-                    <View style={styles.actionTextContainer}>
-                      <Text style={[styles.actionTitle, isCopied && { color: "#16A34A" }]}>
-                        {isCopied ? "Link Copied to Clipboard!" : "Copy Post Link"}
-                      </Text>
-                      <Text style={styles.actionSubtitle}>{postUrl}</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Native Share */}
-                  <TouchableOpacity
-                    style={styles.actionItem}
-                    onPress={handleNativeShare}
-                  >
-                    <View style={[styles.iconCircle, { backgroundColor: "#F5F3FF" }]}>
-                      <Share2 size={22} color="#7C3AED" />
-                    </View>
-                    <View style={styles.actionTextContainer}>
-                      <Text style={styles.actionTitle}>Share via other apps...</Text>
-                      <Text style={styles.actionSubtitle}>WhatsApp, Telegram, Messenger</Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
+          {/* Copy Link */}
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={handleCopyLink}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: isCopied ? "#DCFCE7" : "#F1F5F9" }]}>
+              {isCopied ? (
+                <Check size={20} color="#16A34A" />
+              ) : (
+                <Link2 size={20} color="#0F172A" />
               )}
             </View>
-          </TouchableWithoutFeedback>
+            <View style={styles.actionTextContainer}>
+              <Text style={[styles.actionTitle, isCopied && { color: "#16A34A" }]}>
+                {isCopied ? "Link Copied to Clipboard!" : "Copy Post Link"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Native Share */}
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={handleNativeShare}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: "#F5F3FF" }]}>
+              <Share2 size={20} color="#7C3AED" />
+            </View>
+            <View style={styles.actionTextContainer}>
+              <Text style={styles.actionTitle}>Share via other apps...</Text>
+            </View>
+          </TouchableOpacity>
         </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      )}
+    </AppBottomSheetModal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 36,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 20,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#CBD5E1",
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  closeBtn: {
-    padding: 6,
-    borderRadius: 20,
-    backgroundColor: "#F1F5F9",
-  },
   actionsList: {
-    gap: 12,
+    gap: 10,
+    marginVertical: 4,
   },
   actionItem: {
     flexDirection: "row",
@@ -243,9 +182,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
   },
   iconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -258,17 +197,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#0F172A",
   },
-  actionSubtitle: {
-    fontSize: 12,
-    color: "#64748B",
-    marginTop: 2,
-  },
   composerBox: {
     backgroundColor: "#F8FAFC",
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+    marginVertical: 4,
   },
   input: {
     fontSize: 15,
@@ -308,4 +243,3 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
-

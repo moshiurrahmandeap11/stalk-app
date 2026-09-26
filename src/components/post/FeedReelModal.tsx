@@ -22,6 +22,7 @@ import {
   ArrowUp,
   MessageCircle,
   Share2,
+  Bookmark,
 } from "lucide-react-native";
 import Animated, {
   useSharedValue,
@@ -41,7 +42,9 @@ interface FeedReelModalProps {
   onClose: () => void;
   onPressComment?: () => void;
   onPressLike?: () => void;
+  onPressSave?: () => void;
   isLiked?: boolean;
+  isSaved?: boolean;
   likesCount?: number;
 }
 
@@ -51,7 +54,9 @@ export const FeedReelModal: React.FC<FeedReelModalProps> = ({
   onClose,
   onPressComment,
   onPressLike,
+  onPressSave,
   isLiked = false,
+  isSaved = false,
   likesCount = 0,
 }) => {
   const rawMediaUri = post.media?.url || post.mediaUrl || "";
@@ -212,6 +217,28 @@ export const FeedReelModal: React.FC<FeedReelModalProps> = ({
             </View>
             <Text style={styles.actionCount}>
               {post.commentsCount || post.comments?.length || 0}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Save / Bookmark */}
+          <TouchableOpacity
+            style={styles.actionBtn}
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onPressSave?.();
+            }}
+          >
+            <View style={[styles.iconCircle, isSaved && styles.likedCircle]}>
+              <Bookmark
+                size={22}
+                color={isSaved ? "#2563EB" : "#FFFFFF"}
+                fill={isSaved ? "#2563EB" : "transparent"}
+                strokeWidth={2}
+              />
+            </View>
+            <Text style={[styles.actionCount, isSaved && styles.likedCount]}>
+              {isSaved ? "Saved" : "Save"}
             </Text>
           </TouchableOpacity>
         </View>
