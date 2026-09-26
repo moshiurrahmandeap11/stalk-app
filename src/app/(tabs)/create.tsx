@@ -34,11 +34,12 @@ import {
   Check,
   ChevronDown,
 } from "lucide-react-native";
-import { useQueryClient } from "@tanstack/react-query";
 import { postService } from "../../services/post.service";
 import { useAuthStore } from "../../store/auth.store";
+import { useQueryClient } from "@tanstack/react-query";
 import { Storage } from "../../utils/storage";
 import { prependToFeedCache } from "../../utils/feedCache";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 const TRENDING_HASHTAGS = [
   "#stalk",
@@ -228,9 +229,8 @@ export default function CreatePostTabScreen() {
   };
 
   const avatarUri =
-    user?.profilePicUrl ||
-    user?.avatar ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+    getMediaUrl(user?.profilePicUrl || user?.avatar) ||
+    DEFAULT_AVATAR;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
