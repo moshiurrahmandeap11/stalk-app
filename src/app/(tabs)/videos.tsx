@@ -12,7 +12,7 @@ import {
   ViewToken,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Film, Camera, RefreshCw } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
@@ -49,23 +49,44 @@ export default function VideosTabScreen() {
     isLoading,
     isRefetching,
     refetch,
-  } = useQuery({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
     queryKey: ["videoPosts"],
-    queryFn: async () => {
-      const res = await postService.getFeedPosts(1, 40);
-      const allPosts = res.data || [];
-
-      // Strictly filter only genuine video posts for Reels
-      return allPosts.filter(
-        (p) =>
-          p.mediaType === "video" ||
-          p.media?.resourceType === "video" ||
-          /\.(mp4|mov|webm|m4v)$/i.test(p.media?.url || p.mediaUrl || "")
-      );
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await postService.getFeedPosts(pageParam, 20);
+      return res;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const total = lastPage?.meta?.total ?? 0;
+      const fetched = allPages.reduce((acc, p) => acc + (p?.data?.length || 0), 0);
+      if (fetched < total && (lastPage?.data?.length || 0) > 0) {
+        return allPages.length + 1;
+      }
+      return undefined;
     },
   });
 
-  const reels: IPost[] = data || [];
+  const reels: IPost[] = React.useMemo(() => {
+    if (!data?.pages) return [];
+    const map = new Map<string, IPost>();
+    data.pages.forEach((page) => {
+      if (page?.data) {
+        page.data.forEach((p) => {
+          const isVideo =
+            p.mediaType === "video" ||
+            p.media?.resourceType === "video" ||
+            /\.(mp4|mov|webm|m4v)$/i.test(p.media?.url || p.mediaUrl || "");
+          if (isVideo && p.id) {
+            map.set(p.id, p);
+          }
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [data]);
 
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -165,6 +186,12 @@ export default function VideosTabScreen() {
           viewabilityConfig={viewabilityConfig}
           refreshing={isRefetching}
           onRefresh={refetch}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.5}
           windowSize={3}
           maxToRenderPerBatch={2}
           initialNumToRender={2}

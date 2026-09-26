@@ -53,7 +53,10 @@ export const messageService = {
     }
   },
 
-  async uploadMedia(formData: FormData): Promise<{
+  async uploadMedia(
+    formData: FormData,
+    onUploadProgress?: (progressPercent: number) => void
+  ): Promise<{
     mediaUrl: string;
     fileType: "image" | "video" | "document";
     fileName: string;
@@ -65,6 +68,12 @@ export const messageService = {
     }>("/messages/upload-message-media", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
+      },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total && onUploadProgress) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onUploadProgress(percent);
+        }
       },
     });
     const d = res.data?.data || {};

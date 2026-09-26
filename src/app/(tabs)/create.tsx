@@ -40,6 +40,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Storage } from "../../utils/storage";
 import { prependToFeedCache } from "../../utils/feedCache";
 import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
+import { optimizeImage } from "../../utils/mediaCompressor";
 
 const TRENDING_HASHTAGS = [
   "#stalk",
@@ -78,6 +79,7 @@ export default function CreatePostTabScreen() {
   const [showLocationInput, setShowLocationInput] = useState(false);
   const [locationInput, setLocationInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   // Gallery Picker
   const handlePickMedia = async (mediaType: "images" | "videos") => {
@@ -184,18 +186,19 @@ export default function CreatePostTabScreen() {
       formData.append("description", fullDescription);
 
       if (media) {
-        const fileExt = media.uri.split(".").pop() || "jpg";
-        const isVid = media.type === "video";
+        const optimized = await optimizeImage(media);
         const fileObj = {
-          uri: media.uri,
-          name: `upload_${Date.now()}.${fileExt}`,
-          type: isVid ? "video/mp4" : "image/jpeg",
+          uri: optimized.uri,
+          name: optimized.name,
+          type: optimized.type,
         } as any;
-        // Server expects field name "media"
         formData.append("media", fileObj);
       }
 
-      const newPost = await postService.createPost(formData);
+      setUploadProgress(0);
+      const newPost = await postService.createPost(formData, (progress) => {
+        setUploadProgress(progress);
+      });
 
       if (newPost) {
         queryClient.setQueryData(["posts", 1], (old: any) => {
@@ -217,6 +220,7 @@ export default function CreatePostTabScreen() {
       setMedia(null);
       setSelectedFeeling(null);
       setLocation(null);
+      setUploadProgress(null);
 
       router.replace("/(tabs)" as any);
     } catch (err: any) {
@@ -225,6 +229,7 @@ export default function CreatePostTabScreen() {
       Alert.alert("Error", msg);
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
@@ -264,6 +269,24 @@ export default function CreatePostTabScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        {isSubmitting && (
+          <View style={styles.uploadProgressRow}>
+            <View style={styles.progressBarTrack}>
+              <View
+                style={[
+                  styles.progressBarFill,
+                  { width: `${uploadProgress !== null && uploadProgress > 0 ? uploadProgress : 15}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.uploadProgressText}>
+              {uploadProgress !== null && uploadProgress > 0
+                ? `Uploading media... ${uploadProgress}%`
+                : "Publishing post..."}
+            </Text>
+          </View>
+        )}
 
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           {/* User Profile & Privacy Row */}
@@ -614,6 +637,30 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
+  },
+  uploadProgressRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#EFF6FF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#DBEAFE",
+    gap: 6,
+  },
+  progressBarTrack: {
+    height: 4,
+    backgroundColor: "#BFDBFE",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#2563EB",
+    borderRadius: 2,
+  },
+  uploadProgressText: {
+    fontSize: 12,
+    color: "#1E40AF",
+    fontWeight: "600",
   },
   cancelBtn: {
     paddingVertical: 6,

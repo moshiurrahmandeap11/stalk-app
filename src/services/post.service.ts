@@ -53,9 +53,18 @@ export const postService = {
     return res.data.data;
   },
 
-  async createPost(formData: FormData): Promise<IPost> {
+  async createPost(
+    formData: FormData,
+    onUploadProgress?: (progressPercent: number) => void
+  ): Promise<IPost> {
     const res = await apiClient.post<{ success: boolean; data: IPost }>("/posts/create", formData, {
       headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total && onUploadProgress) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onUploadProgress(percent);
+        }
+      },
     });
     return res.data.data;
   },

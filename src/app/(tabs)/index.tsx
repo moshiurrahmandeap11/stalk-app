@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Search, Bell } from "lucide-react-native";
 import { postService } from "../../services/post.service";
@@ -25,7 +25,6 @@ import { getMediaUrl } from "../../utils/media";
 export default function FeedScreen() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuthStore();
-  const [page, setPage] = useState(1);
   const [visiblePostId, setVisiblePostId] = useState<string | null>(null);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const [cachedPosts, setCachedPosts] = useState<IPost[]>([]);
@@ -80,11 +79,14 @@ export default function FeedScreen() {
     isError,
     error,
     refetch,
-  } = useQuery({
-    queryKey: ["posts", page],
-    queryFn: async () => {
-      const res = await postService.getFeedPosts(page, 15);
-      if (page === 1 && res?.data && res.data.length > 0) {
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["posts"],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await postService.getFeedPosts(pageParam, 12);
+      if (pageParam === 1 && res?.data && res.data.length > 0) {
         // Persist to local disk feed cache
         setFeedCache(res.data);
         // Prefetch top images for lag-free scrolling
@@ -97,7 +99,15 @@ export default function FeedScreen() {
       }
       return res;
     },
-    placeholderData: (prev) => prev,
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const total = lastPage?.meta?.total ?? 0;
+      const fetched = allPages.reduce((acc, p) => acc + (p?.data?.length || 0), 0);
+      if (fetched < total && (lastPage?.data?.length || 0) > 0) {
+        return allPages.length + 1;
+      }
+      return undefined;
+    },
     enabled: isAuthenticated,
   });
 
@@ -107,12 +117,20 @@ export default function FeedScreen() {
   }
 
   // Use fresh query data when loaded, or cached posts instantly while fetching
-  const posts: IPost[] =
-    data?.data && data.data.length > 0
-      ? data.data
-      : cachedPosts.length > 0
-      ? cachedPosts
-      : [];
+  const posts: IPost[] = React.useMemo(() => {
+    if (data?.pages && data.pages.length > 0) {
+      const map = new Map<string, IPost>();
+      data.pages.forEach((p) => {
+        if (p?.data) {
+          p.data.forEach((item) => {
+            if (item?.id) map.set(item.id, item);
+          });
+        }
+      });
+      return Array.from(map.values());
+    }
+    return cachedPosts;
+  }, [data, cachedPosts]);
 
   const showInitialLoading = isLoading && posts.length === 0;
 
@@ -183,6 +201,19 @@ export default function FeedScreen() {
               tintColor="#3B82F6"
               colors={["#3B82F6"]}
             />
+          }
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <View style={styles.footerLoader}>
+                <ActivityIndicator size="small" color="#3B82F6" />
+              </View>
+            ) : null
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -299,6 +330,11 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 14,
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 

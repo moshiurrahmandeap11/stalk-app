@@ -35,7 +35,11 @@ import {
   CheckCheck,
   CornerUpLeft,
   MessageCircle,
+  Mic,
+  Trash2,
 } from "lucide-react-native";
+import { Audio } from "expo-av";
+import { optimizeImage } from "../../utils/mediaCompressor";
 import { messageService } from "../../services/message.service";
 import { userService } from "../../services/user.service";
 import { useAuthStore } from "../../store/auth.store";
@@ -104,6 +108,11 @@ export default function ChatScreen() {
   const [replyMessage, setReplyMessage] = useState<IMessage | null>(null);
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [recordDuration, setRecordDuration] = useState(0);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
   const [whoReactedMessage, setWhoReactedMessage] = useState<IMessage | null>(null);
 
@@ -119,6 +128,9 @@ export default function ChatScreen() {
 
   useEffect(() => {
     preloadChatSounds();
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -185,15 +197,15 @@ export default function ChatScreen() {
     }
   }, [initialMessages]);
 
-  // Mark messages as read
+  // Mark messages as read (both 1-on-1 and group chats)
   useEffect(() => {
     if (id) {
       messageService.markAsRead(id);
       if (socket?.connected) {
-        socket.emit("mark_as_read", { senderId: id });
+        socket.emit("mark_as_read", isGroup ? { conversationId: id } : { senderId: id });
       }
     }
-  }, [id, socket]);
+  }, [id, socket, isGroup]);
 
   // Real-time socket message, typing, and reaction listeners
   useEffect(() => {
@@ -205,6 +217,9 @@ export default function ChatScreen() {
         setMessages((prev) => [...prev, newMsg]);
         setIsPeerTyping(false);
         flatListRef.current?.scrollToEnd({ animated: true });
+        if (socket?.connected) {
+          socket.emit("mark_as_read", isGroup ? { conversationId: id } : { senderId: id });
+        }
       }
     };
 
@@ -333,7 +348,7 @@ export default function ChatScreen() {
     }
   };
 
-  // Media Attachment Upload & Send (Camera, Gallery, File)
+  // Media Attachment Upload & Send (Camera, Gallery, File, Audio)
   const handleSendMedia = async (
     uri: string,
     fileType: "image" | "video" | "file",
@@ -341,6 +356,7 @@ export default function ChatScreen() {
   ) => {
     try {
       setIsUploadingMedia(true);
+      setUploadProgress(0);
       playSendSound();
 
       const tempId = `temp_${Date.now()}`;
@@ -350,6 +366,8 @@ export default function ChatScreen() {
           ? `image/${ext === "png" ? "png" : "jpeg"}`
           : fileType === "video"
           ? "video/mp4"
+          : ext === "m4a"
+          ? "audio/m4a"
           : "application/octet-stream";
 
       const formData = new FormData();
@@ -376,8 +394,10 @@ export default function ChatScreen() {
       };
       setMessages((prev) => [...prev, optimisticMsg]);
 
-      // Upload to server
-      const uploadRes = await messageService.uploadMedia(formData);
+      // Upload to server with real-time progress
+      const uploadRes = await messageService.uploadMedia(formData, (percent) => {
+        setUploadProgress(percent);
+      });
 
       const resolvedMsgType =
         uploadRes.fileType === "document" || (uploadRes.fileType as string) === "file"
@@ -428,6 +448,7 @@ export default function ChatScreen() {
       Alert.alert("Upload Failed", err?.response?.data?.message || err.message || "Could not send media.");
     } finally {
       setIsUploadingMedia(false);
+      setUploadProgress(0);
     }
   };
 
@@ -445,8 +466,14 @@ export default function ChatScreen() {
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       const isVid = asset.type === "video";
-      const name = `camera_${Date.now()}.${isVid ? "mp4" : "jpg"}`;
-      await handleSendMedia(asset.uri, isVid ? "video" : "image", name);
+      let uploadUri = asset.uri;
+      let uploadName = `camera_${Date.now()}.${isVid ? "mp4" : "jpg"}`;
+      if (!isVid) {
+        const compressed = await optimizeImage(asset);
+        uploadUri = compressed.uri;
+        uploadName = compressed.name;
+      }
+      await handleSendMedia(uploadUri, isVid ? "video" : "image", uploadName);
     }
   };
 
@@ -464,8 +491,14 @@ export default function ChatScreen() {
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       const isVid = asset.type === "video";
-      const name = asset.fileName || `media_${Date.now()}.${isVid ? "mp4" : "jpg"}`;
-      await handleSendMedia(asset.uri, isVid ? "video" : "image", name);
+      let uploadUri = asset.uri;
+      let uploadName = asset.fileName || `media_${Date.now()}.${isVid ? "mp4" : "jpg"}`;
+      if (!isVid) {
+        const compressed = await optimizeImage(asset);
+        uploadUri = compressed.uri;
+        uploadName = asset.fileName || compressed.name;
+      }
+      await handleSendMedia(uploadUri, isVid ? "video" : "image", uploadName);
     }
   };
 
@@ -482,6 +515,66 @@ export default function ChatScreen() {
       }
     } catch {
       // Non-blocking
+    }
+  };
+
+  // Voice Note Recording Handlers
+  const startAudioRecording = async () => {
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert("Permission Required", "Microphone access is needed to record voice notes.");
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(newRecording);
+      setIsRecordingAudio(true);
+      setRecordDuration(0);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordDuration((prev) => prev + 1);
+      }, 1000);
+    } catch {
+      Alert.alert("Recording Error", "Could not start audio recording.");
+    }
+  };
+
+  const stopAndSendAudioRecording = async () => {
+    if (!recording) return;
+    try {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      setIsRecordingAudio(false);
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      if (uri) {
+        const fileName = `voicenote_${Date.now()}.m4a`;
+        await handleSendMedia(uri, "file", fileName);
+      }
+    } catch {
+      setRecording(null);
+      setIsRecordingAudio(false);
+    }
+  };
+
+  const cancelAudioRecording = async () => {
+    if (!recording) return;
+    try {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      setIsRecordingAudio(false);
+      await recording.stopAndUnloadAsync();
+      setRecording(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    } catch {
+      setRecording(null);
+      setIsRecordingAudio(false);
     }
   };
 
@@ -988,7 +1081,9 @@ export default function ChatScreen() {
           {isUploadingMedia ? (
             <View style={styles.uploadingBar}>
               <ActivityIndicator size="small" color="#0A7CFF" />
-              <Text style={styles.uploadingText}>Sending attachment...</Text>
+              <Text style={styles.uploadingText}>
+                Sending attachment... {uploadProgress > 0 ? `${uploadProgress}%` : ""}
+              </Text>
             </View>
           ) : null}
 
@@ -998,56 +1093,94 @@ export default function ChatScreen() {
             onCancelReply={() => setReplyMessage(null)}
           />
 
-          {/* Messenger Action & Input Bar */}
-          <View style={styles.inputBar}>
-            {/* Media Attachment Actions */}
-            <View style={styles.attachmentActions}>
+          {/* Messenger Action & Input / Voice Recording Bar */}
+          {isRecordingAudio ? (
+            <View style={styles.recordingBar}>
               <TouchableOpacity
-                style={styles.attachBtn}
-                onPress={handlePickCamera}
+                style={styles.cancelRecordBtn}
+                onPress={cancelAudioRecording}
                 activeOpacity={0.7}
               >
-                <Camera size={20} color="#0A7CFF" />
+                <Trash2 size={20} color="#EF4444" />
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.attachBtn}
-                onPress={handlePickGallery}
-                activeOpacity={0.7}
-              >
-                <ImageIcon size={20} color="#0A7CFF" />
-              </TouchableOpacity>
+              <View style={styles.recordingInfo}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingTime}>
+                  {Math.floor(recordDuration / 60)}:
+                  {(recordDuration % 60).toString().padStart(2, "0")}
+                </Text>
+                <Text style={styles.recordingLabel}>Recording voice note...</Text>
+              </View>
 
               <TouchableOpacity
-                style={styles.attachBtn}
-                onPress={handlePickDocument}
-                activeOpacity={0.7}
+                style={styles.sendRecordBtn}
+                onPress={stopAndSendAudioRecording}
+                activeOpacity={0.8}
               >
-                <Paperclip size={20} color="#0A7CFF" />
+                <Send size={18} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
+          ) : (
+            <View style={styles.inputBar}>
+              {/* Media Attachment Actions */}
+              <View style={styles.attachmentActions}>
+                <TouchableOpacity
+                  style={styles.attachBtn}
+                  onPress={handlePickCamera}
+                  activeOpacity={0.7}
+                >
+                  <Camera size={20} color="#0A7CFF" />
+                </TouchableOpacity>
 
-            {/* Text Input */}
-            <TextInput
-              ref={inputRef}
-              placeholder="Type a message..."
-              placeholderTextColor="#8E8E93"
-              style={styles.inputField}
-              value={inputText}
-              onChangeText={handleTextChange}
-              multiline
-            />
+                <TouchableOpacity
+                  style={styles.attachBtn}
+                  onPress={handlePickGallery}
+                  activeOpacity={0.7}
+                >
+                  <ImageIcon size={20} color="#0A7CFF" />
+                </TouchableOpacity>
 
-            {/* Send Button */}
-            <TouchableOpacity
-              style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
-              onPress={handleSendMessage}
-              disabled={!inputText.trim()}
-              activeOpacity={0.8}
-            >
-              <Send size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
+                <TouchableOpacity
+                  style={styles.attachBtn}
+                  onPress={handlePickDocument}
+                  activeOpacity={0.7}
+                >
+                  <Paperclip size={20} color="#0A7CFF" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Text Input */}
+              <TextInput
+                ref={inputRef}
+                placeholder="Type a message..."
+                placeholderTextColor="#8E8E93"
+                style={styles.inputField}
+                value={inputText}
+                onChangeText={handleTextChange}
+                multiline
+              />
+
+              {/* Send or Mic Button */}
+              {inputText.trim() ? (
+                <TouchableOpacity
+                  style={styles.sendBtn}
+                  onPress={handleSendMessage}
+                  activeOpacity={0.8}
+                >
+                  <Send size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.micBtn}
+                  onPress={startAudioRecording}
+                  activeOpacity={0.8}
+                >
+                  <Mic size={20} color="#0A7CFF" />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
       </View>
 
@@ -1459,5 +1592,60 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#0A7CFF",
+  },
+  micBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F0F2F5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recordingBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E4E6EB",
+    gap: 12,
+  },
+  cancelRecordBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recordingInfo: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#EF4444",
+  },
+  recordingTime: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#EF4444",
+  },
+  recordingLabel: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  sendRecordBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#0A7CFF",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

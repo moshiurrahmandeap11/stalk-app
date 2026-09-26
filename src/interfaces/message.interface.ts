@@ -17,7 +17,7 @@ export interface IMessage {
   senderProfilePicture?: string | null;
   receiverId?: string | null;
   message: string;
-  messageType: "text" | "image" | "video" | "file" | "share" | "audio_call" | "video_call" | "missed_call";
+  messageType: "text" | "image" | "video" | "file" | "audio" | "share" | "audio_call" | "video_call" | "missed_call";
   mediaUrl?: string | null;
   fileName?: string | null;
   fileSize?: number | null;
