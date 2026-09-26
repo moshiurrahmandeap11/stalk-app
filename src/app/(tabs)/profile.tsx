@@ -48,7 +48,7 @@ import { PostCard } from "../../components/post/PostCard";
 import { EditProfileModal } from "../../components/profile/EditProfileModal";
 import { FollowersModal } from "../../components/profile/FollowersModal";
 import { FacebookActionSheet } from "../../components/ui/FacebookActionSheet";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR, DEFAULT_COVER } from "../../utils/media";
 import { IPost } from "../../interfaces/post.interface";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -269,17 +269,11 @@ export default function ProfileTabScreen() {
     );
   }
 
-  const avatarUri = getMediaUrl(
-    user.profilePicUrl ||
-    user.avatar ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-  );
+  const avatarUri =
+    getMediaUrl(user.profilePicUrl || user.avatar) || DEFAULT_AVATAR;
 
-  const coverUri = getMediaUrl(
-    user.coverPhotoUrl ||
-    user.coverImage ||
-    "https://images.unsplash.com/photo-1707343843437-caacff5cfa74?w=800"
-  );
+  const coverUri =
+    getMediaUrl(user.coverPhotoUrl || user.coverImage) || DEFAULT_COVER;
 
   return (
     <View style={styles.container}>
