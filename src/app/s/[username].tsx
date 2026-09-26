@@ -44,6 +44,8 @@ import { followService } from "../../services/follow.service";
 import { postService } from "../../services/post.service";
 import { useAuthStore } from "../../store/auth.store";
 import { PostCard } from "../../components/post/PostCard";
+import { FeedReelModal } from "../../components/post/FeedReelModal";
+import { ImageViewerModal } from "../../components/post/ImageViewerModal";
 import { FollowersModal } from "../../components/profile/FollowersModal";
 import { getMediaUrl, DEFAULT_AVATAR, DEFAULT_COVER } from "../../utils/media";
 import { IPost } from "../../interfaces/post.interface";
@@ -86,6 +88,8 @@ export default function UserProfileScreen() {
   }));
   const [showFollowersModal, setShowFollowersModal] = useState(false);
   const [followersModalTab, setFollowersModalTab] = useState<"followers" | "following">("followers");
+  const [selectedPostForReel, setSelectedPostForReel] = useState<IPost | null>(null);
+  const [selectedPostForImage, setSelectedPostForImage] = useState<IPost | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // 1. Fetch User Profile
@@ -486,6 +490,14 @@ export default function UserProfileScreen() {
                       key={post.id || (post as any)._id}
                       style={styles.gridItem}
                       activeOpacity={0.8}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        if (isVid) {
+                          setSelectedPostForReel(post);
+                        } else {
+                          setSelectedPostForImage(post);
+                        }
+                      }}
                     >
                       <Image source={{ uri: mediaUri }} style={styles.gridImage} contentFit="cover" />
                       {isVid && (
@@ -601,6 +613,24 @@ export default function UserProfileScreen() {
           username={user.username || "user"}
           initialTab={followersModalTab}
           onClose={() => setShowFollowersModal(false)}
+        />
+      )}
+
+      {/* Fullscreen Video / Reel Player Modal */}
+      {selectedPostForReel && (
+        <FeedReelModal
+          visible={Boolean(selectedPostForReel)}
+          post={selectedPostForReel}
+          onClose={() => setSelectedPostForReel(null)}
+        />
+      )}
+
+      {/* Fullscreen Image Lightbox Modal */}
+      {selectedPostForImage && (
+        <ImageViewerModal
+          visible={Boolean(selectedPostForImage)}
+          post={selectedPostForImage}
+          onClose={() => setSelectedPostForImage(null)}
         />
       )}
     </View>
