@@ -10,6 +10,8 @@ import Animated, {
   withDelay,
 } from "react-native-reanimated";
 
+import { DEFAULT_AVATAR } from "../../utils/media";
+
 interface TypingBubbleProps {
   avatarUri?: string | null;
 }
@@ -66,8 +68,7 @@ export const TypingBubble: React.FC<TypingBubbleProps> = ({ avatarUri }) => {
     transform: [{ translateY: dot3.value }],
   }));
 
-  const defaultAvatar =
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+  const defaultAvatar = DEFAULT_AVATAR;
 
   return (
     <View style={styles.container}>
