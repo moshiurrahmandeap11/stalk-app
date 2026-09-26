@@ -115,6 +115,12 @@ export default function CallScreen() {
     getMediaUrl(partner?.avatar) ||
     DEFAULT_AVATAR;
 
+  const getStreamURL = (stream: any): string => {
+    if (!stream) return "";
+    if (typeof stream.toURL === "function") return stream.toURL();
+    return stream.id || "";
+  };
+
   const getStatusText = () => {
     switch (callState) {
       case "calling":
@@ -124,7 +130,7 @@ export default function CallScreen() {
       case "connected":
         return formatDuration(callDuration);
       case "ended":
-        return "Call Ended";
+        return callDuration > 0 ? "Call Ended" : "No Answer / Ended";
       default:
         return "Connecting...";
     }
@@ -153,7 +159,7 @@ export default function CallScreen() {
       {hasRemoteVideo ? (
         <View style={StyleSheet.absoluteFill}>
           <RTCView
-            streamURL={remoteStream.toURL()}
+            streamURL={getStreamURL(remoteStream)}
             objectFit="cover"
             style={StyleSheet.absoluteFill}
             zOrder={0}
@@ -194,7 +200,7 @@ export default function CallScreen() {
       {hasLocalVideo ? (
         <View style={styles.localVideoPip}>
           <RTCView
-            streamURL={localStream.toURL()}
+            streamURL={getStreamURL(localStream)}
             objectFit="cover"
             style={styles.localVideo}
             mirror={isFrontCamera}

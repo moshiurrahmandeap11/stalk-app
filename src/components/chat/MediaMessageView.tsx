@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { VideoView, useVideoPlayer } from "expo-video";
-import { Audio } from "expo-av";
+import { Audio, isAudioSupported } from "../../utils/safeAudio";
 import * as Haptics from "expo-haptics";
 import { FileText, Play, Pause, Mic, X, Download } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -45,7 +45,7 @@ const AudioMessagePlayer: React.FC<{ audioUri: string; isMine: boolean }> = ({
   audioUri,
   isMine,
 }) => {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [sound, setSound] = useState<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [positionMillis, setPositionMillis] = useState(0);
   const [durationMillis, setDurationMillis] = useState(0);
@@ -74,6 +74,12 @@ const AudioMessagePlayer: React.FC<{ audioUri: string; isMine: boolean }> = ({
   const handleTogglePlay = async () => {
     try {
       Haptics.selectionAsync();
+      if (!Audio || !isAudioSupported) {
+        if (audioUri) {
+          WebBrowser.openBrowserAsync(audioUri);
+        }
+        return;
+      }
       if (!sound) {
         setIsLoading(true);
         await Audio.setAudioModeAsync({

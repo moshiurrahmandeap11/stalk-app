@@ -1,26 +1,31 @@
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
+import { Audio, isAudioSupported } from "./safeAudio";
 
-// High-performance lightweight audio chimes for chat
+// High-performance lightweight audio chimes for chat & calling
 const SEND_SOUND_URI =
-  "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"; // Subtle clean pop/whoosh
+  "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3";
 const RECEIVE_SOUND_URI =
-  "https://assets.mixkit.co/active_storage/sfx/2344/2344-preview.mp3"; // Clean Messenger chime
+  "https://assets.mixkit.co/active_storage/sfx/2344/2344-preview.mp3";
 const REACTION_SOUND_URI =
-  "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"; // Crisp reaction pop
+  "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3";
 const NOTIFICATION_SOUND_URI =
-  "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"; // Facebook "tong" chime
-
-let AudioModule: any = null;
-let isAudioChecked = false;
-
-function getAudioModule(): any {
-  return null;
-}
+  "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+const RINGTONE_SOUND_URI =
+  "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
+const DIALING_SOUND_URI =
+  "https://assets.mixkit.co/active_storage/sfx/1360/1360-preview.mp3";
+const CALL_END_SOUND_URI =
+  "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3";
 
 let sendSoundObject: any = null;
 let receiveSoundObject: any = null;
 let reactionSoundObject: any = null;
+let notificationSoundObject: any = null;
+let ringtoneSoundObject: any = null;
+let dialingSoundObject: any = null;
+let ringtoneHapticTimer: any = null;
+
 let isAudioConfigured = false;
 let isSoundEnabled = true;
 
@@ -32,13 +37,12 @@ export const isChatSoundsEnabled = () => isSoundEnabled;
 
 async function setupAudio() {
   if (isAudioConfigured) return;
-  const Audio = getAudioModule();
-  if (!Audio) return;
+  if (!Audio || !isAudioSupported) return;
 
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
+      staysActiveInBackground: true,
       shouldDuckAndroid: true,
     });
     isAudioConfigured = true;
@@ -51,8 +55,7 @@ async function setupAudio() {
  * Preload sound objects in memory so playback triggers with 0ms latency.
  */
 export const preloadChatSounds = async () => {
-  const Audio = getAudioModule();
-  if (!Audio) return;
+  if (!Audio || !isAudioSupported) return;
 
   try {
     await setupAudio();
@@ -95,9 +98,7 @@ export const playSendSound = async () => {
       return;
     }
 
-    const Audio = getAudioModule();
-    if (!Audio) return;
-
+    if (!Audio || !isAudioSupported) return;
     await setupAudio();
 
     if (!sendSoundObject) {
@@ -110,7 +111,7 @@ export const playSendSound = async () => {
       await sendSoundObject.replayAsync();
     }
   } catch {
-    // Graceful fallback to haptics
+    // Graceful fallback
   }
 };
 
@@ -124,9 +125,7 @@ export const playReceiveSound = async () => {
       return;
     }
 
-    const Audio = getAudioModule();
-    if (!Audio) return;
-
+    if (!Audio || !isAudioSupported) return;
     await setupAudio();
 
     if (!receiveSoundObject) {
@@ -139,7 +138,7 @@ export const playReceiveSound = async () => {
       await receiveSoundObject.replayAsync();
     }
   } catch {
-    // Graceful fallback to haptics
+    // Graceful fallback
   }
 };
 
@@ -153,9 +152,7 @@ export const playReactionSound = async () => {
       return;
     }
 
-    const Audio = getAudioModule();
-    if (!Audio) return;
-
+    if (!Audio || !isAudioSupported) return;
     await setupAudio();
 
     if (!reactionSoundObject) {
@@ -172,8 +169,6 @@ export const playReactionSound = async () => {
   }
 };
 
-let notificationSoundObject: any = null;
-
 export const playNotificationSound = async () => {
   try {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -184,9 +179,7 @@ export const playNotificationSound = async () => {
       return;
     }
 
-    const Audio = getAudioModule();
-    if (!Audio) return;
-
+    if (!Audio || !isAudioSupported) return;
     await setupAudio();
 
     if (!notificationSoundObject) {
@@ -199,7 +192,110 @@ export const playNotificationSound = async () => {
       await notificationSoundObject.replayAsync();
     }
   } catch {
-    // Graceful fallback to haptics
+    // Graceful fallback
   }
 };
 
+/**
+ * Starts continuous looping incoming ringtone + rhythmic haptics
+ */
+export const playRingtone = async () => {
+  try {
+    if (ringtoneHapticTimer) clearInterval(ringtoneHapticTimer);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    ringtoneHapticTimer = setInterval(() => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    }, 1600);
+
+    if (!isSoundEnabled) return;
+    if (Audio && isAudioSupported) {
+      await setupAudio();
+      if (!ringtoneSoundObject) {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: RINGTONE_SOUND_URI },
+          { volume: 1.0, isLooping: true, shouldPlay: true }
+        );
+        ringtoneSoundObject = sound;
+      } else {
+        await ringtoneSoundObject.setIsLoopingAsync(true);
+        await ringtoneSoundObject.playAsync();
+      }
+    }
+  } catch {
+    // Non-blocking
+  }
+};
+
+export const stopRingtone = async () => {
+  try {
+    if (ringtoneHapticTimer) {
+      clearInterval(ringtoneHapticTimer);
+      ringtoneHapticTimer = null;
+    }
+    if (ringtoneSoundObject) {
+      await ringtoneSoundObject.stopAsync();
+      await ringtoneSoundObject.unloadAsync();
+      ringtoneSoundObject = null;
+    }
+  } catch {
+    ringtoneSoundObject = null;
+  }
+};
+
+/**
+ * Starts continuous looping outgoing dialing tone
+ */
+export const playDialingTone = async () => {
+  try {
+    if (!isSoundEnabled) return;
+    if (Audio && isAudioSupported) {
+      await setupAudio();
+      if (!dialingSoundObject) {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: DIALING_SOUND_URI },
+          { volume: 0.7, isLooping: true, shouldPlay: true }
+        );
+        dialingSoundObject = sound;
+      } else {
+        await dialingSoundObject.setIsLoopingAsync(true);
+        await dialingSoundObject.playAsync();
+      }
+    }
+  } catch {
+    // Non-blocking
+  }
+};
+
+export const stopDialingTone = async () => {
+  try {
+    if (dialingSoundObject) {
+      await dialingSoundObject.stopAsync();
+      await dialingSoundObject.unloadAsync();
+      dialingSoundObject = null;
+    }
+  } catch {
+    dialingSoundObject = null;
+  }
+};
+
+export const playCallEndedSound = async () => {
+  try {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    stopRingtone();
+    stopDialingTone();
+
+    if (!isSoundEnabled) return;
+    if (Audio && isAudioSupported) {
+      await setupAudio();
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: CALL_END_SOUND_URI },
+        { volume: 0.8, shouldPlay: true }
+      );
+      setTimeout(() => {
+        sound.unloadAsync().catch(() => {});
+      }, 2000);
+    }
+  } catch {
+    // Non-blocking
+  }
+};

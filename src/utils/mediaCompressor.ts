@@ -1,4 +1,3 @@
-import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 
 export interface CompressedMediaResult {
@@ -8,55 +7,65 @@ export interface CompressedMediaResult {
   size?: number;
 }
 
+let ImageManipulatorModule: any = null;
+try {
+  ImageManipulatorModule = require("expo-image-manipulator");
+} catch {
+  // ExpoImageManipulator native module not available in current runtime
+}
+
 /**
  * Optimizes and compresses images to avoid uploading massive 4K/raw files.
- * Resizes images to max 1920px width/height and compresses with quality 0.8 JPEG.
+ * Uses expo-image-manipulator when available, or seamlessly falls back to
+ * the picker asset (which is already compressed via quality: 0.8 in ImagePicker).
  */
 export async function optimizeImage(
   asset: ImagePicker.ImagePickerAsset
 ): Promise<CompressedMediaResult> {
-  try {
-    const isVideo = asset.type === "video";
-    if (isVideo) {
-      // Videos are passed directly
-      const fileExt = asset.uri.split(".").pop() || "mp4";
-      return {
-        uri: asset.uri,
-        name: `video_${Date.now()}.${fileExt}`,
-        type: "video/mp4",
-        size: asset.fileSize,
-      };
-    }
+  const isVideo = asset.type === "video";
+  const fileExt = asset.uri.split(".").pop() || (isVideo ? "mp4" : "jpg");
 
-    // Determine target dimensions
-    const maxWidth = 1920;
-    const actions: any[] = [];
-    if (asset.width && asset.width > maxWidth) {
-      actions.push({ resize: { width: maxWidth } });
-    }
-
-    const manipResult = await manipulateAsync(
-      asset.uri,
-      actions,
-      {
-        compress: 0.82,
-        format: SaveFormat.JPEG,
-      }
-    );
-
-    return {
-      uri: manipResult.uri,
-      name: `image_${Date.now()}.jpg`,
-      type: "image/jpeg",
-    };
-  } catch (err) {
-    console.warn("[MediaCompressor] Compression fallback to original asset:", err);
-    const fileExt = asset.uri.split(".").pop() || "jpg";
+  if (isVideo) {
     return {
       uri: asset.uri,
-      name: `upload_${Date.now()}.${fileExt}`,
-      type: asset.type === "video" ? "video/mp4" : "image/jpeg",
+      name: `video_${Date.now()}.${fileExt}`,
+      type: "video/mp4",
       size: asset.fileSize,
     };
   }
+
+  if (ImageManipulatorModule && ImageManipulatorModule.manipulateAsync) {
+    try {
+      const maxWidth = 1920;
+      const actions: any[] = [];
+      if (asset.width && asset.width > maxWidth) {
+        actions.push({ resize: { width: maxWidth } });
+      }
+
+      const manipResult = await ImageManipulatorModule.manipulateAsync(
+        asset.uri,
+        actions,
+        {
+          compress: 0.82,
+          format: ImageManipulatorModule.SaveFormat?.JPEG || "jpeg",
+        }
+      );
+
+      return {
+        uri: manipResult.uri,
+        name: `image_${Date.now()}.jpg`,
+        type: "image/jpeg",
+        size: asset.fileSize,
+      };
+    } catch {
+      // Fallback
+    }
+  }
+
+  return {
+    uri: asset.uri,
+    name: asset.fileName || `image_${Date.now()}.${fileExt}`,
+    type: "image/jpeg",
+    size: asset.fileSize,
+  };
 }

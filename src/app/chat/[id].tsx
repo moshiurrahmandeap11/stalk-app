@@ -38,7 +38,7 @@ import {
   Mic,
   Trash2,
 } from "lucide-react-native";
-import { Audio } from "expo-av";
+import { Audio, isAudioSupported } from "../../utils/safeAudio";
 import { optimizeImage } from "../../utils/mediaCompressor";
 import { messageService } from "../../services/message.service";
 import { userService } from "../../services/user.service";
@@ -109,7 +109,7 @@ export default function ChatScreen() {
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [recording, setRecording] = useState<any>(null);
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -521,6 +521,13 @@ export default function ChatScreen() {
   // Voice Note Recording Handlers
   const startAudioRecording = async () => {
     try {
+      if (!Audio || !isAudioSupported) {
+        Alert.alert(
+          "Audio Not Supported",
+          "Voice recording is available when running with native audio capabilities."
+        );
+        return;
+      }
       const { granted } = await Audio.requestPermissionsAsync();
       if (!granted) {
         Alert.alert("Permission Required", "Microphone access is needed to record voice notes.");

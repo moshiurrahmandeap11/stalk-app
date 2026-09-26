@@ -336,8 +336,12 @@ class WebRTCService {
   public switchCamera(): void {
     if (!this.localStream) return;
     const videoTrack = this.localStream.getVideoTracks()[0];
-    if (videoTrack && typeof videoTrack._switchCamera === "function") {
-      videoTrack._switchCamera();
+    if (videoTrack) {
+      if (typeof videoTrack._switchCamera === "function") {
+        videoTrack._switchCamera();
+      } else if (typeof videoTrack.switchCamera === "function") {
+        videoTrack.switchCamera();
+      }
     }
   }
 

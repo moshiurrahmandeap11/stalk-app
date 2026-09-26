@@ -65,16 +65,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socketInstance.on("call_accepted", async (data: any) => {
+      const { stopDialingTone, stopRingtone } = require("../utils/chatSounds");
+      stopDialingTone();
+      stopRingtone();
+
       useCallStore.setState({ callState: "connected" });
+      useCallStore.getState().startDurationTimer();
+
       if (data?.answer) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { webrtcService } = require("../services/webrtc.service");
         await webrtcService.handleAnswer(data.answer);
       }
-      const timer = setInterval(() => {
-        useCallStore.getState().tickDuration();
-      }, 1000);
-      (useCallStore as any)._timer = timer;
     });
 
     socketInstance.on("answer", async (data: any) => {
@@ -94,6 +96,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socketInstance.on("call_rejected", () => {
+      const { stopDialingTone, stopRingtone, playCallEndedSound } = require("../utils/chatSounds");
+      stopDialingTone();
+      stopRingtone();
+      playCallEndedSound();
+
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { webrtcService } = require("../services/webrtc.service");
       try {
@@ -101,13 +108,19 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       } catch {
         // ignore
       }
+      useCallStore.getState().stopDurationTimer();
       useCallStore.setState({ callState: "ended" });
       setTimeout(() => {
         useCallStore.getState().resetCall();
-      }, 1200);
+      }, 1000);
     });
 
     socketInstance.on("call_ended", () => {
+      const { stopDialingTone, stopRingtone, playCallEndedSound } = require("../utils/chatSounds");
+      stopDialingTone();
+      stopRingtone();
+      playCallEndedSound();
+
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { webrtcService } = require("../services/webrtc.service");
       try {
@@ -115,24 +128,31 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       } catch {
         // ignore
       }
+      useCallStore.getState().stopDurationTimer();
+      useCallStore.setState({ callState: "ended" });
+      setTimeout(() => {
+        useCallStore.getState().resetCall();
+      }, 1000);
+    });
+
+    socketInstance.on("call_busy", () => {
+      const { stopDialingTone, stopRingtone, playCallEndedSound } = require("../utils/chatSounds");
+      stopDialingTone();
+      stopRingtone();
+      playCallEndedSound();
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { webrtcService } = require("../services/webrtc.service");
+      try {
+        webrtcService.cleanup();
+      } catch {
+        // ignore
+      }
+      useCallStore.getState().stopDurationTimer();
       useCallStore.setState({ callState: "ended" });
       setTimeout(() => {
         useCallStore.getState().resetCall();
       }, 1200);
-    });
-
-    socketInstance.on("call_busy", () => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { webrtcService } = require("../services/webrtc.service");
-      try {
-        webrtcService.cleanup();
-      } catch {
-        // ignore
-      }
-      useCallStore.setState({ callState: "ended" });
-      setTimeout(() => {
-        useCallStore.getState().resetCall();
-      }, 1500);
     });
 
     // Message & Notification background/foreground handlers
