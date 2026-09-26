@@ -45,7 +45,7 @@ import { useCallStore } from "../../store/call.store";
 import { messageService } from "../../services/message.service";
 import { IConversation, IMessage } from "../../interfaces/message.interface";
 import { playSendSound, playReceiveSound } from "../../utils/chatSounds";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR, DEFAULT_GROUP_AVATAR } from "../../utils/media";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CHAT_HEAD_SIZE = 56;
@@ -914,10 +914,9 @@ export const FloatingChatHead: React.FC = () => {
                       const title = isGroup
                         ? item.name || "Group Chat"
                         : other?.userName || "Chat";
-                      const avatar =
-                        item.avatar ||
-                        other?.userProfilePicture ||
-                        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+                      const avatar = isGroup
+                        ? (item.avatar ? getMediaUrl(item.avatar) : DEFAULT_GROUP_AVATAR)
+                        : (getMediaUrl(item.avatar || other?.userProfilePicture) || DEFAULT_AVATAR);
 
                       return (
                         <TouchableOpacity
