@@ -19,7 +19,7 @@ import { X, Search, UserCheck, UserPlus, Users } from "lucide-react-native";
 import { IUser } from "../../interfaces/user.interface";
 import { followService } from "../../services/follow.service";
 import { useAuthStore } from "../../store/auth.store";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 
 interface FollowersModalProps {
   visible: boolean;
@@ -227,11 +227,9 @@ const UserRow: React.FC<UserRowProps> = ({
   const targetId = targetUser.id || (targetUser as any)._id;
   const isMe = currentUserId === targetId;
 
-  const avatarUri = getMediaUrl(
-    targetUser.profilePicUrl ||
-    targetUser.avatar ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-  );
+  const avatarUri =
+    getMediaUrl(targetUser.profilePicUrl || targetUser.avatar) ||
+    DEFAULT_AVATAR;
 
   // Check follow status of this specific user
   const { data: isFollowing = false } = useQuery({
