@@ -24,7 +24,7 @@ interface MediaMessageViewProps {
 }
 
 function formatBytes(bytes?: number | null): string {
-  if (!bytes) return "File";
+  if (!bytes || bytes <= 0) return "File";
   const sizes = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
@@ -37,12 +37,25 @@ export const MediaMessageView: React.FC<MediaMessageViewProps> = ({ message, isM
   const rawUri = message.mediaUrl || "";
   const mediaUri = getMediaUrl(rawUri);
 
-  const videoPlayer = useVideoPlayer(mediaUri, (p) => {
+  const isImage =
+    message.messageType === "image" ||
+    /\.(jpg|jpeg|png|gif|webp|heic|bmp|svg)$/i.test(rawUri);
+
+  const isVideo =
+    message.messageType === "video" ||
+    /\.(mp4|mov|webm|m4v|3gp|mkv)$/i.test(rawUri);
+
+  const isDoc =
+    message.messageType === "file" ||
+    (message.messageType as string) === "document" ||
+    Boolean(!isImage && !isVideo && (rawUri || message.fileName));
+
+  const videoPlayer = useVideoPlayer(isVideo ? mediaUri : "", (p) => {
     p.loop = true;
     p.muted = false;
   });
 
-  if (message.messageType === "image") {
+  if (isImage && mediaUri) {
     return (
       <View style={styles.imageWrapper}>
         <TouchableOpacity
@@ -92,7 +105,7 @@ export const MediaMessageView: React.FC<MediaMessageViewProps> = ({ message, isM
     );
   }
 
-  if (message.messageType === "video") {
+  if (isVideo && mediaUri) {
     return (
       <View style={styles.videoWrapper}>
         <TouchableOpacity
@@ -151,7 +164,12 @@ export const MediaMessageView: React.FC<MediaMessageViewProps> = ({ message, isM
     );
   }
 
-  if (message.messageType === "file") {
+  if (isDoc || rawUri || message.fileName) {
+    const displayFileName =
+      message.fileName ||
+      (rawUri ? rawUri.split("/").pop()?.split("?")[0] : null) ||
+      "Document";
+
     return (
       <TouchableOpacity
         style={[styles.fileCard, isMine ? styles.fileCardMine : styles.fileCardTheirs]}
@@ -162,15 +180,16 @@ export const MediaMessageView: React.FC<MediaMessageViewProps> = ({ message, isM
           }
         }}
       >
-        <View style={styles.fileIconWrapper}>
-          <FileText size={24} color={isMine ? "#FFFFFF" : "#0A7CFF"} />
+        <View style={[styles.fileIconWrapper, isMine && styles.fileIconWrapperMine]}>
+          <FileText size={22} color={isMine ? "#FFFFFF" : "#0A7CFF"} />
         </View>
         <View style={styles.fileDetails}>
           <Text
             style={[styles.fileName, isMine && styles.textWhite]}
             numberOfLines={1}
+            ellipsizeMode="middle"
           >
-            {message.fileName || "Document"}
+            {displayFileName}
           </Text>
           <Text style={[styles.fileSize, isMine ? styles.textWhiteSub : styles.textGrey]}>
             {formatBytes(message.fileSize)}
@@ -229,16 +248,18 @@ const styles = StyleSheet.create({
   fileCard: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 14,
     gap: 10,
-    width: 230,
+    minWidth: 210,
+    maxWidth: 270,
   },
   fileCardMine: {
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
   },
   fileCardTheirs: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F0F2F5",
     borderWidth: 1,
     borderColor: "#E4E6EB",
   },
@@ -246,9 +267,12 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "rgba(0, 0, 0, 0.08)",
+    backgroundColor: "#E7F3FF",
     alignItems: "center",
     justifyContent: "center",
+  },
+  fileIconWrapperMine: {
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
   },
   fileDetails: {
     flex: 1,
@@ -266,7 +290,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   textWhiteSub: {
-    color: "rgba(255, 255, 255, 0.8)",
+    color: "rgba(255, 255, 255, 0.85)",
   },
   textGrey: {
     color: "#65676B",
@@ -311,4 +335,3 @@ const styles = StyleSheet.create({
     height: SCREEN_HEIGHT,
   },
 });
-
