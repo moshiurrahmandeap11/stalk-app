@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { IMessageReaction } from "../../interfaces/message.interface";
-import { getMediaUrl } from "../../utils/media";
+import { getMediaUrl, DEFAULT_AVATAR } from "../../utils/media";
 import { AppBottomSheetModal } from "../ui/AppBottomSheetModal";
 
 interface WhoReactedModalProps {
@@ -83,7 +83,7 @@ export const WhoReactedModal: React.FC<WhoReactedModalProps> = ({
             renderItem={({ item }) => {
               const avatarUri =
                 getMediaUrl(item.userAvatar) ||
-                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+                DEFAULT_AVATAR;
 
               return (
                 <TouchableOpacity
