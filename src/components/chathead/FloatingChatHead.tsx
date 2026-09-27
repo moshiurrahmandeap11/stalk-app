@@ -12,6 +12,7 @@ import {
   Platform,
   Keyboard,
   ScrollView,
+  BackHandler,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -147,6 +148,26 @@ export const FloatingChatHead: React.FC = () => {
       hideSub2.remove();
     };
   }, []);
+
+  // Android hardware back button handler:
+  // When chat head window is open, pressing phone back closes it like Messenger
+  useEffect(() => {
+    if (!isChatHeadOpen) return;
+
+    const onBackPress = () => {
+      closeChatHead();
+      return true; // Consume event so underlying screen doesn't navigate back or exit app
+    };
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isChatHeadOpen, closeChatHead]);
 
   // Fetch conversations when chat window opens without active conversation
   useEffect(() => {
@@ -504,12 +525,19 @@ export const FloatingChatHead: React.FC = () => {
       {/* 2. Messenger-Identical Dropdown Card Overlay */}
       {isChatHeadOpen && (
         <View style={styles.fullScreenBackdrop}>
+          {/* Backdrop Touch: clicking anywhere outside the chat window dismisses it */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={closeChatHead}
+          />
+
           {/* Top Row: Horizontal Chat Heads */}
           <View style={[styles.topChatHeadsBar, { paddingTop: Math.max(insets.top, 12) }]}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.topChatHeadsContent}
+              contentContainerStyle={[styles.topChatHeadsContent, { flexGrow: 1 }]}
             >
               {activeBubbles.map((bubble) => {
                 const isActive = bubble.conversationId === activeConversationId;
@@ -558,17 +586,12 @@ export const FloatingChatHead: React.FC = () => {
                 );
               })}
 
-              {/* Close All Chat Heads Button */}
+              {/* Tapping empty space in the row closes chat head */}
               <TouchableOpacity
-                style={styles.topCloseAllBtn}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  dismissChatHead();
-                }}
-                activeOpacity={0.7}
-              >
-                <X size={18} color="#94A3B8" strokeWidth={2.5} />
-              </TouchableOpacity>
+                style={styles.topBarEmptySpacer}
+                activeOpacity={1}
+                onPress={closeChatHead}
+              />
             </ScrollView>
           </View>
 
@@ -623,43 +646,33 @@ export const FloatingChatHead: React.FC = () => {
               </TouchableOpacity>
 
               {/* Right Action Icons: Tag, Phone, Video */}
-              <View style={styles.headerActions}>
-                {activeConversationId && (
-                  <>
-                    <TouchableOpacity
-                      style={styles.headerIconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => Haptics.selectionAsync()}
-                    >
-                      <Tag size={22} color="#8B5CF6" />
-                    </TouchableOpacity>
+              {activeConversationId && (
+                <View style={styles.headerActions}>
+                  <TouchableOpacity
+                    style={styles.headerIconBtn}
+                    activeOpacity={0.7}
+                    onPress={() => Haptics.selectionAsync()}
+                  >
+                    <Tag size={22} color="#8B5CF6" />
+                  </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={styles.headerIconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => handleStartCall("audio")}
-                    >
-                      <Phone size={22} color="#8B5CF6" />
-                    </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.headerIconBtn}
+                    activeOpacity={0.7}
+                    onPress={() => handleStartCall("audio")}
+                  >
+                    <Phone size={22} color="#8B5CF6" />
+                  </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={styles.headerIconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => handleStartCall("video")}
-                    >
-                      <Video size={24} color="#8B5CF6" />
-                    </TouchableOpacity>
-                  </>
-                )}
-
-                <TouchableOpacity
-                  style={styles.headerIconBtn}
-                  activeOpacity={0.7}
-                  onPress={closeChatHead}
-                >
-                  <X size={20} color="#94A3B8" />
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    style={styles.headerIconBtn}
+                    activeOpacity={0.7}
+                    onPress={() => handleStartCall("video")}
+                  >
+                    <Video size={24} color="#8B5CF6" />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             {/* Quoted Reply Banner */}
@@ -1121,14 +1134,10 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "800",
   },
-  topCloseAllBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 6,
+  topBarEmptySpacer: {
+    flex: 1,
+    minWidth: 60,
+    height: 48,
   },
   dropdownCard: {
     flex: 1,

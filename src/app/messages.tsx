@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
@@ -36,6 +37,20 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
   const [convList, setConvList] = useState<IConversation[]>([]);
   const [typingUsers, setTypingUsers] = useState<{ [userId: string]: boolean }>({});
   const typingTimersRef = useRef<{ [userId: string]: ReturnType<typeof setTimeout> }>({});
+
+  const onlineContacts = React.useMemo(() => {
+    const seen = new Set<string>();
+    return convList.filter((c) => {
+      if (c.isGroup) return false;
+      const otherParticipant = c.participants?.find((p) => p.userId !== currentUserId);
+      const partnerId = c.friendId || otherParticipant?.userId || c.id;
+      if (!partnerId || !onlineUsers.includes(partnerId) || seen.has(partnerId)) {
+        return false;
+      }
+      seen.add(partnerId);
+      return true;
+    });
+  }, [convList, onlineUsers, currentUserId]);
 
   const { data: conversations, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["conversations"],
@@ -163,6 +178,59 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
           data={convList}
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
+          ListHeaderComponent={
+            onlineContacts.length > 0 ? (
+              <View style={styles.activeSection}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.activeListContent}
+                >
+                  {onlineContacts.map((c) => {
+                    const otherParticipant = c.participants?.find((p) => p.userId !== currentUserId);
+                    const fullName =
+                      c.friendName ||
+                      otherParticipant?.userName ||
+                      otherParticipant?.name ||
+                      c.name ||
+                      "User";
+                    const firstName = fullName.split(" ")[0] || fullName;
+                    const avatar =
+                      getMediaUrl(
+                        c.friendProfilePicture ||
+                          c.avatar ||
+                          otherParticipant?.userProfilePicture ||
+                          otherParticipant?.avatar
+                      ) || DEFAULT_AVATAR;
+                    const targetId = c.friendId || otherParticipant?.userId || c.id;
+
+                    return (
+                      <TouchableOpacity
+                        key={`active_${c.id}`}
+                        style={styles.activeUserItem}
+                        activeOpacity={0.7}
+                        onPress={() => router.push(`/chat/${targetId}` as any)}
+                      >
+                        <View style={styles.activeAvatarWrapper}>
+                          <View style={styles.activeAvatarRing}>
+                            <Image
+                              source={{ uri: avatar }}
+                              style={styles.activeUserAvatar}
+                              contentFit="cover"
+                            />
+                          </View>
+                          <View style={styles.activeUserBadge} />
+                        </View>
+                        <Text style={styles.activeUserName} numberOfLines={1}>
+                          {firstName}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => {
             const isGroup = Boolean(item.isGroup);
             const otherParticipant = item.participants?.find((p) => p.userId !== currentUserId);
@@ -205,12 +273,7 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
                           {item.participants?.length || 0} members
                         </Text>
                       </View>
-                    ) : isOnline ? (
-                      <View style={styles.activeNowBadge}>
-                        <View style={styles.activeNowDot} />
-                        <Text style={styles.activeNowText}>Active now</Text>
-                      </View>
-                    ) : item.lastActiveAt ? (
+                    ) : !isOnline && item.lastActiveAt ? (
                       <Text style={styles.lastActiveText}>
                         {formatLastActive(item.lastActiveAt)}
                       </Text>
@@ -406,26 +469,67 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#FFFFFF",
   },
-  activeNowBadge: {
-    flexDirection: "row",
+  activeSection: {
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  activeListContent: {
+    paddingHorizontal: 16,
+    gap: 16,
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "#ECFDF5",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 6,
   },
-  activeNowDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  activeUserItem: {
+    alignItems: "center",
+    width: 64,
+  },
+  activeAvatarWrapper: {
+    position: "relative",
+    width: 60,
+    height: 60,
+  },
+  activeAvatarRing: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: "#10B981",
+    padding: 2,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  activeUserAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#E2E8F0",
+  },
+  activeUserBadge: {
+    position: "absolute",
+    bottom: 1,
+    right: 1,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
     backgroundColor: "#10B981",
+    borderWidth: 2.5,
+    borderColor: "#FFFFFF",
+    elevation: 4,
   },
-  activeNowText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#059669",
+  activeUserName: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#0F172A",
+    marginTop: 6,
+    textAlign: "center",
+    maxWidth: 64,
   },
   lastActiveText: {
     fontSize: 11,
