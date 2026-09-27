@@ -29,19 +29,27 @@ class ChatHeadModule(private val reactContext: ReactApplicationContext) :
             putExtra("title", title)
             putExtra("unreadCount", unreadCount)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            reactContext.startForegroundService(intent)
-        } else {
-            reactContext.startService(intent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                reactContext.startForegroundService(intent)
+            } else {
+                reactContext.startService(intent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     @ReactMethod
     fun hideBubble() {
-        val intent = Intent(reactContext, ChatHeadService::class.java).apply {
-            action = ChatHeadService.ACTION_HIDE
+        try {
+            val intent = Intent(reactContext, ChatHeadService::class.java).apply {
+                action = ChatHeadService.ACTION_HIDE
+            }
+            reactContext.startService(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-        reactContext.startService(intent)
     }
 
     @ReactMethod
@@ -77,6 +85,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -117,7 +126,19 @@ class ChatHeadService : Service() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildForegroundNotification())
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    buildForegroundNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, buildForegroundNotification())
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -131,7 +152,12 @@ class ChatHeadService : Service() {
             }
             ACTION_HIDE -> {
                 removeBubble()
-                stopForeground(true)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
                 stopSelf()
             }
         }
@@ -160,7 +186,6 @@ class ChatHeadService : Service() {
                 y = 200
             }
 
-            // Create circular bubble layout
             chatHeadView = FrameLayout(this).apply {
                 val bg = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
@@ -170,7 +195,6 @@ class ChatHeadService : Service() {
                 background = bg
                 elevation = dpToPx(6).toFloat()
 
-                // Initials Text
                 val textView = TextView(context).apply {
                     text = title.take(1).uppercase()
                     setTextColor(Color.WHITE)
@@ -186,7 +210,6 @@ class ChatHeadService : Service() {
                     )
                 )
 
-                // Unread Badge if > 0
                 if (unreadCount > 0) {
                     val badgeSize = dpToPx(20)
                     val badgeView = TextView(context).apply {
@@ -207,7 +230,6 @@ class ChatHeadService : Service() {
                     addView(badgeView, badgeParams)
                 }
 
-                // Touch & Drag Listener
                 setOnTouchListener(object : View.OnTouchListener {
                     override fun onTouch(v: View, event: MotionEvent): Boolean {
                         val p = params ?: return false
@@ -228,11 +250,9 @@ class ChatHeadService : Service() {
                             MotionEvent.ACTION_UP -> {
                                 val diffX = abs(event.rawX - initialTouchX)
                                 val diffY = abs(event.rawY - initialTouchY)
-                                // If movement was minimal, consider it a tap -> open app
                                 if (diffX < 15 && diffY < 15) {
                                     openApp()
                                 } else {
-                                    // Snap to nearest edge (left or right)
                                     val displayMetrics = resources.displayMetrics
                                     val screenWidth = displayMetrics.widthPixels
                                     p.x = if (p.x + sizePx / 2 < screenWidth / 2) 10 else screenWidth - sizePx - 10
@@ -263,7 +283,12 @@ class ChatHeadService : Service() {
         if (launchIntent != null) {
             startActivity(launchIntent)
             removeBubble()
-            stopForeground(true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
             stopSelf()
         }
     }
@@ -284,7 +309,7 @@ class ChatHeadService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Stalk Chat Head Service",
-                NotificationManager.IMPORTANCE_MIN
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Keeps Stalk floating chat head active"
                 setShowBadge(false)
@@ -308,7 +333,7 @@ class ChatHeadService : Service() {
             .setContentText("Chat head is active over other apps")
             .setSmallIcon(applicationInfo.icon)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
@@ -329,20 +354,23 @@ import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
+import java.util.ArrayList
 
 class ChatHeadPackage : ReactPackage {
-    override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return listOf(ChatHeadModule(reactContext))
+    override fun createNativeModules(reactContext: ReactApplicationContext): MutableList<NativeModule> {
+        val modules = ArrayList<NativeModule>()
+        modules.add(ChatHeadModule(reactContext))
+        return modules
     }
 
-    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
-        return emptyList()
+    override fun createViewManagers(reactContext: ReactApplicationContext): MutableList<ViewManager<*, *>> {
+        return ArrayList()
     }
 }
 `;
 
 module.exports = function withChatHead(config) {
-  // 1. AndroidManifest updates (Permission + Service registration)
+  // 1. AndroidManifest updates (Permission + Service registration with foregroundServiceType)
   config = withAndroidManifest(config, (modConfig) => {
     const mainApplication = modConfig.modResults.manifest.application?.[0];
     if (mainApplication) {
@@ -358,6 +386,7 @@ module.exports = function withChatHead(config) {
             "android:name": "com.stalk.app.chathead.ChatHeadService",
             "android:enabled": "true",
             "android:exported": "false",
+            "android:foregroundServiceType": "specialUse",
           },
         });
       }
@@ -392,16 +421,20 @@ module.exports = function withChatHead(config) {
     },
   ]);
 
-  // 3. Register ChatHeadPackage in MainApplication
+  // 3. Register ChatHeadPackage in MainApplication (properly placed AFTER package declaration)
   config = withMainApplication(config, (modConfig) => {
     let contents = modConfig.modResults.contents;
     if (!contents.includes("import com.stalk.app.chathead.ChatHeadPackage")) {
-      contents = "import com.stalk.app.chathead.ChatHeadPackage\n" + contents;
-    }
-    if (!contents.includes("add(ChatHeadPackage())") && !contents.includes("packages.add(ChatHeadPackage())")) {
       contents = contents.replace(
-        /PackageList\(this\)\.getPackages\(\)\.apply\s*\{/,
-        "PackageList(this).getPackages().apply {\n              add(ChatHeadPackage())"
+        /(package\s+com\.stalk\.app[^\n]*\n)/,
+        "$1\nimport com.stalk.app.chathead.ChatHeadPackage\n"
+      );
+    }
+    if (!contents.includes("add(ChatHeadPackage())")) {
+      // Matches both .packages.apply { and .getPackages().apply {
+      contents = contents.replace(
+        /PackageList\(this\)\.(?:packages|getPackages\(\))\.apply\s*\{/,
+        "PackageList(this).packages.apply {\n          add(ChatHeadPackage())"
       );
     }
     modConfig.modResults.contents = contents;
