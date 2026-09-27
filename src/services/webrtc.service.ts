@@ -46,15 +46,27 @@ export const RTCView = (props: any) => {
 
 const ICE_SERVERS = {
   iceServers: [
+    // Fast Google Public STUN
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" },
+
+    // Dedicated VPS STUN & TURN Relay Server (Ultra-low latency, bypasses CGNAT / Mobile Data firewalls)
+    {
+      urls: [
+        "stun:103.71.47.73:3478",
+        "turn:103.71.47.73:3478?transport=udp",
+        "turn:103.71.47.73:3478?transport=tcp",
+      ],
+      username: "stalkuser",
+      credential: "Stalk#WebRTC2026!",
+    },
+
+    // Public fallback TURN
     {
       urls: [
         "turn:openrelay.metered.ca:80",
         "turn:openrelay.metered.ca:443",
         "turn:openrelay.metered.ca:443?transport=tcp",
-        "turns:openrelay.metered.ca:443?transport=tcp",
       ],
       username: "openrelayproject",
       credential: "openrelayproject",
