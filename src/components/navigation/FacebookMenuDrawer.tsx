@@ -284,6 +284,10 @@ export const FacebookMenuDrawer: React.FC<FacebookMenuDrawerProps> = ({
                 activeOpacity={0.7}
                 onPress={() => {
                   Haptics.selectionAsync();
+                  closeDrawer();
+                  setTimeout(() => {
+                    router.push("/settings" as any);
+                  }, 200);
                 }}
               >
                 <Moon size={20} color="#64748B" style={styles.settingsIcon} />
@@ -296,6 +300,10 @@ export const FacebookMenuDrawer: React.FC<FacebookMenuDrawerProps> = ({
                 activeOpacity={0.7}
                 onPress={() => {
                   Haptics.selectionAsync();
+                  closeDrawer();
+                  setTimeout(() => {
+                    router.push("/settings" as any);
+                  }, 200);
                 }}
               >
                 <Settings size={20} color="#64748B" style={styles.settingsIcon} />
@@ -308,6 +316,10 @@ export const FacebookMenuDrawer: React.FC<FacebookMenuDrawerProps> = ({
                 activeOpacity={0.7}
                 onPress={() => {
                   Haptics.selectionAsync();
+                  closeDrawer();
+                  setTimeout(() => {
+                    router.push("/settings" as any);
+                  }, 200);
                 }}
               >
                 <HelpCircle size={20} color="#64748B" style={styles.settingsIcon} />

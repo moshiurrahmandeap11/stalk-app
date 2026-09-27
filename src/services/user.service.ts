@@ -58,5 +58,13 @@ export const userService = {
       // Non-blocking
     }
   },
+
+  async changePassword(data: { currentPassword: string; newPassword: string }): Promise<void> {
+    await apiClient.post("/users/change-password", data);
+  },
+
+  async deleteAccount(userId: string): Promise<void> {
+    await apiClient.delete(`/users/${userId}`);
+  },
 };
 
