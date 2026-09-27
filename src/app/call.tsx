@@ -97,7 +97,11 @@ export default function CallScreen() {
   // Auto exit screen when call ends or resets
   useEffect(() => {
     if (callState === "idle") {
-      router.back();
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/(tabs)" as any);
+      }
     }
   }, [callState]);
 

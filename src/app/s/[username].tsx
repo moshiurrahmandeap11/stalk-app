@@ -231,7 +231,16 @@ export default function UserProfileScreen() {
         <Text style={styles.notFoundSubtitle}>
           @{username} does not exist or has been removed.
         </Text>
-        <TouchableOpacity style={styles.backHomeBtn} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backHomeBtn}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)" as any);
+            }
+          }}
+        >
           <Text style={styles.backHomeText}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -263,7 +272,16 @@ export default function UserProfileScreen() {
         <View style={styles.coverWrapper}>
           <Image source={{ uri: coverUri }} style={styles.coverPhoto} contentFit="cover" />
           <SafeAreaView style={styles.coverOverlay} edges={["top"]}>
-            <TouchableOpacity style={styles.navBackBtn} onPress={() => router.back()}>
+            <TouchableOpacity
+              style={styles.navBackBtn}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/(tabs)" as any);
+                }
+              }}
+            >
               <ArrowLeft size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </SafeAreaView>

@@ -154,7 +154,13 @@ export default function NotificationsScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)" as any);
+            }
+          }}
           activeOpacity={0.7}
         >
           <ArrowLeft size={22} color="#0F172A" />

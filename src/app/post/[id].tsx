@@ -74,7 +74,16 @@ export default function PostDetailScreen() {
     return (
       <SafeAreaView style={styles.notFoundContainer}>
         <Text style={styles.notFoundText}>Post not found</Text>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)" as any);
+            }
+          }}
+        >
           <Text style={styles.backText}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -85,7 +94,16 @@ export default function PostDetailScreen() {
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backIconBtn} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backIconBtn}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)" as any);
+            }
+          }}
+        >
           <ArrowLeft size={22} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Post</Text>

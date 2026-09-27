@@ -44,6 +44,7 @@ export interface IConversation {
   unreadCount?: number;
   updatedAt?: string | Date;
   isRequest?: boolean;
+  lastActiveAt?: string | Date | null;
   participants?: {
     userId: string;
     userName?: string;

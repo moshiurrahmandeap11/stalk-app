@@ -46,6 +46,7 @@ import { messageService } from "../../services/message.service";
 import { IConversation, IMessage } from "../../interfaces/message.interface";
 import { playSendSound, playReceiveSound } from "../../utils/chatSounds";
 import { getMediaUrl, DEFAULT_AVATAR, DEFAULT_GROUP_AVATAR } from "../../utils/media";
+import { queryClient } from "../../utils/queryClient";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CHAT_HEAD_SIZE = 56;
@@ -214,6 +215,9 @@ export const FloatingChatHead: React.FC = () => {
   const loadMessages = async (convId: string) => {
     try {
       setLoadingMessages(true);
+      resetUnreadCount(convId);
+      messageService.markAsRead(convId).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
       const data = await messageService.getMessages(convId);
       setMessages(data || []);
       setTimeout(() => {
@@ -271,17 +275,19 @@ export const FloatingChatHead: React.FC = () => {
           messageType: "text",
           tempId,
         });
-      }
+      } else {
+        const sent = await messageService.sendMessage(activeConversationId, {
+          message: payload,
+          messageType: "text",
+          tempId,
+        });
 
-      const sent = await messageService.sendMessage(activeConversationId, {
-        message: payload,
-        messageType: "text",
-        tempId,
-      });
-
-      if (sent) {
-        setMessages((prev) => prev.map((m) => (m.tempId === tempId ? sent : m)));
+        if (sent) {
+          setMessages((prev) => prev.map((m) => (m.tempId === tempId ? sent : m)));
+        }
       }
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["chatMessages", activeConversationId] });
     } catch {
       // quiet fail
     } finally {
@@ -350,6 +356,8 @@ export const FloatingChatHead: React.FC = () => {
         });
         if (sent) {
           setMessages((prev) => [...prev, sent]);
+          queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          queryClient.invalidateQueries({ queryKey: ["chatMessages", activeConversationId] });
           setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });
           }, 100);

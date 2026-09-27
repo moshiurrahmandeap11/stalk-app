@@ -66,6 +66,8 @@ import {
   preloadChatSounds,
 } from "../../utils/chatSounds";
 import { getMediaUrl, DEFAULT_AVATAR, DEFAULT_GROUP_AVATAR } from "../../utils/media";
+import { formatLastActive } from "../../utils/date";
+import { queryClient } from "../../utils/queryClient";
 import * as Clipboard from "expo-clipboard";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -202,14 +204,20 @@ export default function ChatScreen() {
     }
   }, [initialMessages]);
 
-  // Mark messages as read (both 1-on-1 and group chats)
+  // Mark messages as read, register active chat screen and reset chathead unread
   useEffect(() => {
     if (id) {
+      useChatHeadStore.getState().setActiveScreenChatId(id);
+      useChatHeadStore.getState().resetUnreadCount(id);
       messageService.markAsRead(id);
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
       if (socket?.connected) {
         socket.emit("mark_as_read", isGroup ? { conversationId: id } : { senderId: id });
       }
     }
+    return () => {
+      useChatHeadStore.getState().setActiveScreenChatId(null);
+    };
   }, [id, socket, isGroup]);
 
   // Real-time socket message, typing, and reaction listeners
@@ -348,6 +356,7 @@ export default function ChatScreen() {
         });
         setMessages((prev) => prev.map((m) => (m.tempId === tempId ? saved : m)));
       }
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
     } catch {
       // Optimistic message remains
     }
@@ -449,6 +458,7 @@ export default function ChatScreen() {
         });
         setMessages((prev) => prev.map((m) => (m.tempId === tempId ? saved : m)));
       }
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
     } catch (err: any) {
       Alert.alert("Upload Failed", err?.response?.data?.message || err.message || "Could not send media.");
     } finally {
@@ -686,7 +696,16 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/messages" as any);
+            }
+          }}
+        >
           <ArrowLeft size={22} color="#0F172A" />
         </TouchableOpacity>
 
@@ -729,6 +748,8 @@ export default function ChatScreen() {
                 ? "Typing..."
                 : isOnline
                 ? "Active now"
+                : (targetUser as any)?.lastActiveAt
+                ? formatLastActive((targetUser as any).lastActiveAt)
                 : "Offline"}
             </Text>
           </View>
@@ -743,7 +764,11 @@ export default function ChatScreen() {
             onPress={() => {
               Haptics.selectionAsync();
               useChatHeadStore.getState().showBubbleForConversation(id!, chatTitle, avatarUri);
-              router.back();
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/messages" as any);
+              }
             }}
           >
             <MessageCircle size={20} color="#0A7CFF" />

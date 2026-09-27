@@ -28,16 +28,9 @@ import {
   addNotificationResponseListener,
 } from "../utils/notifications";
 
-SplashScreen.preventAutoHideAsync().catch(() => {});
+import { queryClient } from "../utils/queryClient";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 2,
-      staleTime: 1000 * 60,
-    },
-  },
-});
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();

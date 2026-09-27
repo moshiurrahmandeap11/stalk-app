@@ -5,6 +5,7 @@ import { ENV } from "../config/env";
 import { Storage } from "../utils/storage";
 import { presentSystemNotification } from "../utils/notifications";
 import { playReceiveSound } from "../utils/chatSounds";
+import { queryClient } from "../utils/queryClient";
 import { useChatHeadStore } from "./chathead.store";
 
 interface SocketState {
@@ -54,6 +55,13 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       set((state) => ({
         onlineUsers: state.onlineUsers.filter((id) => id !== userId),
       }));
+    });
+
+    socketInstance.on("user_last_active", (data: { userId: string; lastActiveAt: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      if (data?.userId) {
+        queryClient.invalidateQueries({ queryKey: ["targetUser", data.userId] });
+      }
     });
 
     // WebRTC Call Signaling Listeners
@@ -164,47 +172,65 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       const targetConvId = newMsg?.conversationId || newMsg?.senderId;
       const targetSenderName = newMsg?.senderName || "Friend";
 
-      if (isBackground) {
-        presentSystemNotification({
-          title: targetSenderName,
-          body:
-            newMsg?.messageType === "image"
-              ? "📷 Sent a photo"
-              : newMsg?.messageType === "video"
-              ? "🎥 Sent a video"
-              : newMsg?.messageType === "file"
-              ? `📎 Sent a file: ${newMsg?.fileName || ""}`
-              : newMsg?.message || "Sent you a message",
-          channelId: "messages",
-          data: {
-            type: "message",
-            conversationId: targetConvId,
-            senderId: newMsg?.senderId,
-          },
-        });
+      const activeScreenChatId = useChatHeadStore.getState().activeScreenChatId;
+      const isCurrentlyInThisChat =
+        Boolean(activeScreenChatId) &&
+        (activeScreenChatId === targetConvId ||
+          activeScreenChatId === newMsg?.senderId ||
+          activeScreenChatId === newMsg?.conversationId);
 
-        // Float bubble over other apps if enabled
-        const chatStore = useChatHeadStore.getState();
-        if (chatStore.isChatHeadEnabled && Platform.OS === "android") {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { NativeModules } = require("react-native");
-          NativeModules.ChatHeadModule?.showBubble(
-            targetConvId,
-            targetSenderName,
-            chatStore.unreadMessagesCount + 1
-          );
+      if (!isCurrentlyInThisChat) {
+        if (isBackground) {
+          presentSystemNotification({
+            title: targetSenderName,
+            body:
+              newMsg?.messageType === "image"
+                ? "📷 Sent a photo"
+                : newMsg?.messageType === "video"
+                ? "🎥 Sent a video"
+                : newMsg?.messageType === "file"
+                ? `📎 Sent a file: ${newMsg?.fileName || ""}`
+                : newMsg?.message || "Sent you a message",
+            channelId: "messages",
+            data: {
+              type: "message",
+              conversationId: targetConvId,
+              senderId: newMsg?.senderId,
+            },
+          });
+
+          // Float bubble over other apps if enabled
+          const chatStore = useChatHeadStore.getState();
+          if (chatStore.isChatHeadEnabled && Platform.OS === "android") {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { NativeModules } = require("react-native");
+            NativeModules.ChatHeadModule?.showBubble(
+              targetConvId,
+              targetSenderName,
+              chatStore.unreadMessagesCount + 1
+            );
+          }
         }
-      }
 
-      useChatHeadStore.getState().showBubbleForConversation(
-        targetConvId,
-        targetSenderName,
-        newMsg?.senderAvatar || newMsg?.senderProfilePicture || newMsg?.sender?.profilePicUrl,
-        newMsg?.senderId
-      );
+        useChatHeadStore.getState().showBubbleForConversation(
+          targetConvId,
+          targetSenderName,
+          newMsg?.senderAvatar || newMsg?.senderProfilePicture || newMsg?.sender?.profilePicUrl,
+          newMsg?.senderId
+        );
+      }
 
       if (!isBackground) {
         playReceiveSound();
+      }
+
+      // Keep conversations and message history in sync across app
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      if (targetConvId) {
+        queryClient.invalidateQueries({ queryKey: ["chatMessages", targetConvId] });
+      }
+      if (newMsg?.senderId) {
+        queryClient.invalidateQueries({ queryKey: ["chatMessages", newMsg.senderId] });
       }
     };
 

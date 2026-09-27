@@ -23,11 +23,12 @@ import { FacebookActionSheet } from "../components/ui/FacebookActionSheet";
 import { playReceiveSound, setChatSoundsEnabled, isChatSoundsEnabled } from "../utils/chatSounds";
 import { CreateGroupModal } from "../components/chat/CreateGroupModal";
 import { DEFAULT_AVATAR, DEFAULT_GROUP_AVATAR, getMediaUrl } from "../utils/media";
+import { formatLastActive } from "../utils/date";
 
 export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = {}) {
   const router = useRouter();
   const currentUserId = useAuthStore((s) => s.user?.id);
-  const { socket } = useSocketStore();
+  const { socket, onlineUsers } = useSocketStore();
   const { isChatHeadEnabled, toggleChatHeadEnabled } = useChatHeadStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [isSoundsActive, setIsSoundsActive] = useState(isChatSoundsEnabled());
@@ -116,7 +117,16 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
       {/* Header */}
       <View style={styles.header}>
         {!isTab ? (
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/(tabs)" as any);
+              }
+            }}
+          >
             <ArrowLeft size={22} color="#0F172A" />
           </TouchableOpacity>
         ) : (
@@ -165,7 +175,8 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
 
             const unread = otherParticipant?.unreadCount || item.unreadCount || 0;
             const targetId = isGroup ? item.id : item.friendId || otherParticipant?.userId || item.id;
-            const otherUserId = isGroup ? "" : item.friendId || otherParticipant?.userId || "";
+            const otherUserId = isGroup ? "" : item.friendId || otherParticipant?.userId || item.id || "";
+            const isOnline = !isGroup && Boolean(otherUserId && onlineUsers.includes(otherUserId));
             const isUserTyping = Boolean(otherUserId && typingUsers[otherUserId]);
 
             return (
@@ -176,6 +187,7 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
               >
                 <View style={styles.avatarWrapper}>
                   <Image source={{ uri: avatar }} style={styles.convAvatar} contentFit="cover" />
+                  {isOnline ? <View style={styles.onlineBadge} /> : null}
                   {isGroup ? (
                     <View style={styles.groupBadge}>
                       <Users size={10} color="#FFFFFF" />
@@ -193,6 +205,15 @@ export default function MessagesScreen({ isTab = false }: { isTab?: boolean } = 
                           {item.participants?.length || 0} members
                         </Text>
                       </View>
+                    ) : isOnline ? (
+                      <View style={styles.activeNowBadge}>
+                        <View style={styles.activeNowDot} />
+                        <Text style={styles.activeNowText}>Active now</Text>
+                      </View>
+                    ) : item.lastActiveAt ? (
+                      <Text style={styles.lastActiveText}>
+                        {formatLastActive(item.lastActiveAt)}
+                      </Text>
                     ) : null}
                   </View>
                   {isUserTyping ? (
@@ -361,6 +382,17 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     backgroundColor: "#E2E8F0",
   },
+  onlineBadge: {
+    position: "absolute",
+    bottom: 1,
+    right: 1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#10B981",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
   groupBadge: {
     position: "absolute",
     bottom: 0,
@@ -373,6 +405,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1.5,
     borderColor: "#FFFFFF",
+  },
+  activeNowBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 6,
+  },
+  activeNowDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981",
+  },
+  activeNowText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#059669",
+  },
+  lastActiveText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#94A3B8",
+    marginLeft: 6,
   },
   convInfo: {
     flex: 1,

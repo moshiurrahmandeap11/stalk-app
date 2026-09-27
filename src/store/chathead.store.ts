@@ -19,7 +19,9 @@ interface ChatHeadState {
   activeConversationAvatar: string | null;
   activePartnerId: string | null;
   activeBubbles: IChatBubble[];
+  activeScreenChatId: string | null;
 
+  setActiveScreenChatId: (id: string | null) => void;
   toggleChatHeadEnabled: () => Promise<void>;
   setChatHeadEnabled: (enabled: boolean) => Promise<void>;
   setChatHeadOpen: (open: boolean) => void;
@@ -43,6 +45,11 @@ export const useChatHeadStore = create<ChatHeadState>((set, get) => ({
   activeConversationAvatar: null,
   activePartnerId: null,
   activeBubbles: [],
+  activeScreenChatId: null,
+
+  setActiveScreenChatId(id) {
+    set({ activeScreenChatId: id });
+  },
 
   async loadPreferences() {
     try {
