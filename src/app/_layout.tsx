@@ -26,6 +26,7 @@ import { FloatingChatHead } from "../components/chathead/FloatingChatHead";
 import {
   setupNotificationChannels,
   addNotificationResponseListener,
+  registerForPushNotificationsAsync,
 } from "../utils/notifications";
 
 import { queryClient } from "../utils/queryClient";
@@ -75,7 +76,18 @@ export default function RootLayout() {
     setupNotificationChannels().catch(() => {});
 
     const unsubscribe = addNotificationResponseListener((data) => {
-      if (data?.type === "message" && data?.conversationId) {
+      if (data?.type === "call") {
+        router.push({
+          pathname: "/call",
+          params: {
+            callerId: data.from,
+            callerName: data.fromName || "Caller",
+            callerAvatar: data.fromAvatar || "",
+            callType: data.callType || "audio",
+            isIncoming: "true",
+          },
+        } as any);
+      } else if (data?.type === "message" && data?.conversationId) {
         router.push(`/chat/${data.conversationId}` as any);
       } else if (data?.type === "notification") {
         if (data?.postId) {
@@ -95,6 +107,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (isAuthenticated) {
       connectSocket();
+      registerForPushNotificationsAsync().catch(() => {});
     } else {
       disconnectSocket();
     }

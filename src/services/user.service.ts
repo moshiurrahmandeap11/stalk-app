@@ -50,5 +50,13 @@ export const userService = {
     );
     return res.data.data;
   },
+
+  async updatePushToken(pushToken: string): Promise<void> {
+    try {
+      await apiClient.post("/users/push-token", { pushToken });
+    } catch {
+      // Non-blocking
+    }
+  },
 };
 

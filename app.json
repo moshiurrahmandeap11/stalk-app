@@ -59,6 +59,8 @@
       "expo-video",
       "expo-audio",
       "@config-plugins/react-native-webrtc",
+      "expo-notifications",
+      "./plugins/withChatHead.js",
       [
         "expo-build-properties",
         {

@@ -70,6 +70,23 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socketInstance.on("incoming_call", (data: any) => {
       useCallStore.getState().setIncomingCall(data);
+
+      const isBackground = AppState.currentState !== "active";
+      if (isBackground) {
+        presentSystemNotification({
+          title: `Incoming ${data.type === "video" ? "Video" : "Audio"} Call`,
+          body: `${data.fromName || "Someone"} is calling you...`,
+          channelId: "calls",
+          data: {
+            type: "call",
+            from: data.from,
+            fromName: data.fromName,
+            fromAvatar: data.fromAvatar,
+            callType: data.type,
+            offer: data.offer,
+          },
+        });
+      }
     });
 
     socketInstance.on("call_accepted", async (data: any) => {
